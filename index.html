@@ -4,34 +4,52 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script>
-/* Motor Firebase do Bunker 20: estudantes entram com login anônimo (sem senha, sem e-mail)
+/* Motor Firebase de "Zumbis Não Sabem Química": estudantes entram com login anônimo (sem senha, sem e-mail)
    e gravam só o próprio registro em players/<sessão>/<id>. As regras do banco garantem isso. */
 (function(){
-  const cfg = window.FIREBASE_CONFIG;
-  if(!window.firebase || !cfg || !cfg.apiKey || /COLE/.test(cfg.apiKey)){ console.warn('Bunker 20: Firebase não configurado, jogo em modo offline.'); return; }
+  /* configuração reserva, usada se o firebase-config.js faltar ou estiver com erro */
+  const EMBED = {"apiKey":"AIzaSyDJ3QnU0J8QYHuwJdE3nCOCceVJjCeKCEU","authDomain":"zumbis-nao-sabem-quimica.firebaseapp.com","databaseURL":"https://zumbis-nao-sabem-quimica-default-rtdb.firebaseio.com","projectId":"zumbis-nao-sabem-quimica","storageBucket":"zumbis-nao-sabem-quimica.firebasestorage.app","messagingSenderId":"226998541020","appId":"1:226998541020:web:4e411300485701fffdf219"};
+  const ok = c => !!(c && c.apiKey && c.databaseURL && !/COLE/.test(c.apiKey));
+  let cfg = window.FIREBASE_CONFIG, from = 'firebase-config.js';
+  if(!ok(cfg) && typeof firebaseConfig !== 'undefined' && ok(firebaseConfig)) cfg = firebaseConfig;   // colado no formato do Firebase
+  if(!ok(cfg) && ok(EMBED)){ cfg = EMBED; from = 'configuração embutida'; }
+  if(!window.firebase){ window.BUNKER_OFFLINE_REASON = 'não foi possível carregar o Firebase (sem internet, ou a rede da escola bloqueia gstatic.com).'; console.warn('Zumbis Não Sabem Química: ' + window.BUNKER_OFFLINE_REASON); return; }
+  if(!ok(cfg)){ window.BUNKER_OFFLINE_REASON = 'o arquivo firebase-config.js não foi encontrado ou ainda não foi preenchido.'; console.warn('Zumbis Não Sabem Química: ' + window.BUNKER_OFFLINE_REASON); return; }
+  console.info('Zumbis Não Sabem Química: modo online ativo (' + from + ').');
   firebase.initializeApp(cfg);
   const auth = firebase.auth(), db = firebase.database(), TS = firebase.database.ServerValue.TIMESTAMP;
+  const fail = (msg)=>{ const e = new Error(msg); e.mine = true; return e; };
+  function why(e){
+    const c = String((e && e.code) || '') + ' ' + String((e && e.message) || '');
+    if(/operation-not-allowed|admin-restricted/i.test(c)) return 'O login Anônimo não está ativado no Firebase (Authentication › Método de login). Avise o professor.';
+    if(/api-key/i.test(c)) return 'A chave (apiKey) do Firebase está incorreta. Avise o professor.';
+    if(/permission|denied/i.test(c)) return 'O banco recusou o acesso: as regras do Firebase não foram publicadas. Avise o professor.';
+    if(/network|offline|unavailable/i.test(c)) return 'Sem conexão com a internet. Confira a rede e tente de novo.';
+    return 'Não consegui conectar (' + ((e && (e.code || e.message)) || 'erro desconhecido') + ').';
+  }
   let ready = null;
   const me = ()=> ready || (ready = new Promise((res, rej)=>{
-    const off = auth.onAuthStateChanged(u=>{ if(u){ off(); res(u); } else auth.signInAnonymously().catch(e=>{ ready = null; rej(new Error('Não consegui conectar. Confira a internet.')); }); });
+    const off = auth.onAuthStateChanged(u=>{ if(u){ off(); res(u); } else auth.signInAnonymously().catch(e=>{ off(); ready = null; rej(fail(why(e))); }); });
   }));
   const ended = ()=>{ const e = new Error('A sessão foi encerrada pelo professor.'); e.ended = true; return e; };
   const pref = (sid, uid)=> db.ref('players/' + sid + '/' + uid);
   window.BUNKER_BACKEND = {
     adminUrl: 'admin.html', interval: 30000,
     async join(code, nick){
-      const u = await me();
-      const c = await db.ref('codes/' + code).get();
-      if(!c.exists()) throw new Error('Sessão não encontrada. Confira o código com o professor.');
-      const sid = c.val();
-      const ss = await db.ref('sessions/' + sid).get();
-      if(!ss.exists()) throw new Error('Sessão não encontrada. Confira o código com o professor.');
-      const s = ss.val(), r = pref(sid, u.uid), prev = await r.get();
-      if(s.closed && !prev.exists()) throw new Error('Esta sessão foi encerrada pelo professor.');
-      nick = String(nick || '').replace(/[<>"'`\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24) || 'Sobrevivente';
-      await r.update({ nick, joinedAt: (prev.exists() && prev.val().joinedAt) || TS, lastSeen: TS, online: true });
-      r.onDisconnect().update({ online: false, lastSeen: TS });
-      return { token: sid, nick, session: { code, name: s.name, act: s.act, dif: s.dif, seed: s.seed || 0 } };
+      try{
+        const u = await me();
+        const c = await db.ref('codes/' + code).get();
+        if(!c.exists()) throw fail('Sessão não encontrada. Confira o código com o professor.');
+        const sid = c.val();
+        const ss = await db.ref('sessions/' + sid).get();
+        if(!ss.exists()) throw fail('Sessão não encontrada. Confira o código com o professor.');
+        const s = ss.val(), r = pref(sid, u.uid), prev = await r.get();
+        if(s.closed && !prev.exists()) throw fail('Esta sessão foi encerrada pelo professor.');
+        nick = String(nick || '').replace(/[<>"'`\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24) || 'Sobrevivente';
+        await r.update({ nick, joinedAt: (prev.exists() && prev.val().joinedAt) || TS, lastSeen: TS, online: true });
+        r.onDisconnect().update({ online: false, lastSeen: TS });
+        return { token: sid, nick, session: { code, name: s.name, act: s.act, dif: s.dif, seed: s.seed || 0 } };
+      }catch(e){ if(e && e.mine) throw e; throw fail(why(e)); }
     },
     async resume(sid){
       const u = await me(), r = pref(sid, u.uid);
@@ -163,6 +181,16 @@ button{font:inherit;color:inherit;cursor:pointer}
 .ln.ach{color:var(--term);background:var(--leaf);padding:2px 6px;justify-self:start}
 .ln.code{color:var(--fg);background:#000;border:1px dashed var(--amber-dim);padding:6px 8px;user-select:all;font-size:calc(17px*var(--ts));word-break:break-all}
 .ln.big{font-family:var(--f-display);font-size:calc(13px*var(--ts));line-height:1.7;color:var(--amber);margin-top:6px}
+.ln.alert{color:var(--warn);font-size:calc(27px*var(--ts));line-height:1.1;border:2px solid var(--warn);background:rgba(242,193,78,.09);padding:8px 10px;margin:4px 0}
+.cal{display:grid;grid-template-columns:repeat(20,minmax(0,1fr));gap:2px;margin:4px 0}
+.cal span{font-size:calc(15px*var(--ts));text-align:center;border:1px solid var(--amber-dim);color:var(--amber-dim);padding:3px 0;font-variant-numeric:tabular-nums}
+.cal span.start{background:var(--warn);border-color:var(--warn);color:#120e08}
+.cal span.end{border:2px solid var(--warn);color:var(--warn)}
+.cal span.off{background:var(--danger);border-color:var(--danger);color:#160806}
+.cal span.now{outline:2px solid var(--fg);outline-offset:1px}
+@media (max-width:640px){.cal{grid-template-columns:repeat(10,minmax(0,1fr))}.ln.alert{font-size:calc(22px*var(--ts))}}
+.cal span{white-space:nowrap;overflow:hidden}
+.stat .v.warnday{color:var(--warn)}
 #choices{display:grid;gap:6px;padding:10px 12px 12px;border-top:1px dashed var(--amber-dim);position:relative;z-index:1;max-height:min(62vh,640px);overflow-y:auto}
 #choices:empty{display:none}
 #choices.grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
@@ -237,7 +265,7 @@ th{color:var(--dim);font-weight:normal;text-transform:uppercase;font-size:15px;l
     <div class="stat"><span class="k">Água tratada</span><span class="v" id="hWa" style="color:var(--water)">—</span></div>
     <div class="stat"><span class="k">Comida</span><span class="v" id="hFo" style="color:var(--leaf)">—</span></div>
     <div class="tools">
-      <button class="tool" id="tMusic" type="button" aria-pressed="false">Música: desligada</button>
+      <button class="tool" id="tMusic" type="button" aria-pressed="false">Som: ligado</button>
       <label class="vol" for="tVol">Volume <input type="range" id="tVol" min="0" max="100" step="5" value="40"></label>
       <button class="tool" id="tVoice" type="button" aria-pressed="false">Voz: desligada</button>
       <span class="net" id="tNet" hidden></span>
@@ -452,7 +480,7 @@ const PAGES = {
   desidratacao:{a:1,t:'Desidratação', x:'Fatias finas de fruta ao sol e ao vento perdem água. Com pouca água disponível, fungos e bactérias não crescem. Carne precisa de sal antes de secar.'},
   acucar:{a:1,t:'Açúcar em alta concentração', x:'Doces e compotas conservam pelo mesmo princípio da salga: muito soluto puxa a água por osmose. Por isso um doce fechado dura meses sem geladeira.'},
   acidez:{a:1,t:'Conserva ácida', x:'O vinagre (ácido acético) baixa o pH. A maioria das bactérias perigosas não cresce em pH abaixo de 4,6. Ideal para legumes.'},
-  germinacao:{a:1,t:'Germinação', x:'Para germinar, a semente precisa de água, oxigênio e temperatura adequada. A luz só se torna essencial depois, quando a plântula começa a fotossíntese. Solo encharcado tira o oxigênio das raízes. A rega pode usar água não potável.'},
+  germinacao:{a:1,t:'Germinação, fotossíntese e respiração', x:'Para germinar, a semente precisa de água, oxigênio (O₂) e temperatura adequada: sem folhas, ela vive da respiração celular, que consome O₂. Quando as folhas aparecem, começa a fotossíntese: com luz, a planta usa gás carbônico (CO₂) do ar e água para produzir glicose e libera O₂. Mas ela continua respirando o tempo todo, inclusive pelas raízes: por isso solo encharcado sufoca as raízes. A rega pode usar água não potável.'},
   combustao:{a:2,t:'Combustão e o triângulo do fogo', x:'O fogo precisa de combustível (o óleo), comburente (o oxigênio do ar) e calor. Com pouco oxigênio, a combustão fica incompleta: forma fuligem (carbono) e monóxido de carbono (CO), um gás tóxico e sem cheiro. Chama sempre com ventilação.'},
   capilaridade:{a:2,t:'Pavio e capilaridade', x:'O óleo sobe pelo pavio por capilaridade, pelos espaços entre as fibras do barbante. Pavio curto (cerca de 1 cm acima do óleo) dá chama pequena e estável. Pavio longo faz chama alta, fumacenta e perigosa.'},
   eletroquimica:{a:2,t:'Pilha: oxirredução', x:'Na pilha de limão, o zinco do prego galvanizado se oxida (perde elétrons). No cobre, íons H+ do ácido do limão recebem elétrons (redução). O suco do limão é o eletrólito. Os elétrons passam pelo fio: isso é corrente elétrica. Os dois metais precisam ser diferentes.'},
@@ -489,7 +517,7 @@ function earn(id){
   if(!S || S.achRun.includes(id)) return;
   S.achRun.push(id);
   if(!meta.ach.includes(id)){ meta.ach.push(id); save(META_KEY, meta); }
-  say('★ CONQUISTA: ' + ACH[id].t + ' · ' + ACH[id].d, 'ach');
+  say('★ CONQUISTA: ' + ACH[id].t + ' · ' + ACH[id].d, 'ach'); typing = typing.then(()=>sfx('ach'));
 }
 function checkAch(){
   if(!S || !started) return;
@@ -616,12 +644,12 @@ const TOPICS = [
   { id:'horta', a:1, k:'comida', label:'Como começo uma horta aqui dentro?', page:'germinacao',
     lesson:['Comida enlatada acaba. Você precisa produzir.',
       'Rápido: brotos de feijão num pote. Molho de 8 a 12 horas, depois escorrer e enxaguar 2 vezes por dia. Ficam prontos em uns 4 dias.',
-      'Longo prazo: um canteiro com terra embaixo da janela alta. Terra úmida, sem encharcar. A rega pode usar água não tratada. A colheita sai depois de 6 dias de bom crescimento.',
+      'Longo prazo: um canteiro com terra embaixo da janela alta, onde chegam a luz e o gás carbônico (CO₂) do ar que as folhas usam na fotossíntese. Terra úmida, sem encharcar: as raízes também respiram e precisam de oxigênio. A rega pode usar água não tratada. A colheita sai depois de 6 dias de bom crescimento.',
       'Sementes: mercadinho ou feira. Terra: quintais das casas vizinhas.'],
     q:'O que a semente precisa para GERMINAR?',
     o:[['Luz forte desde o primeiro dia',0],['Água, oxigênio e temperatura adequada',1],['Bastante adubo e terra encharcada',0]],
-    ok:'Isso. A luz entra depois, quando a planta começa a fotossíntese.',
-    no:'Não. Para germinar bastam água, oxigênio e temperatura. Encharcar tira o oxigênio.' },
+    ok:'Isso. Luz e gás carbônico (CO₂) só entram depois, na fotossíntese. O oxigênio segue importante a vida toda: a planta também respira.',
+    no:'Não. Para germinar bastam água, oxigênio e temperatura: a semente ainda não faz fotossíntese, ela vive da respiração. Encharcar tira o oxigênio.' },
   { id:'luz', a:2, k:'energia', label:'Como ilumino o bunker sem gastar energia?', page:'combustao',
     lesson:['Cada noite com a lâmpada acesa custa 1 kWh. Precisamos de outra luz.',
       'Lamparina de óleo: pote de vidro, óleo de cozinha usado e um barbante grosso como pavio. Deixe só uns 1 cm de pavio acima do óleo, preso num suporte de arame ou tampinha.',
@@ -758,14 +786,14 @@ function newRun(){
     filter:null, planter:null, sprouts:null, dried:false, visits:{}, sick:0, infected:false,
     lamp:null, lampFuel:0, battery:null, batteryOk:false, ledOwned:false, insul:null, barricade:false,
     soapCure:0, soapMade:false, soapPerfect:false, washed:false, mask:false, kit:false, wound:null, harvests:0,
-    reported:{}, pending:null, blackout:false, rec:[], achRun:[], still:0, calcOk:0, irisA3:0, manual:[], runNo:0, netToken:null, archived:false,
+    reported:{}, pending:null, blackout:false, plantTreated:false, rec:[], achRun:[], still:0, calcOk:0, irisA3:0, manual:[], runNo:0, netToken:null, archived:false,
     end:null, score:null, tier:null };
 }
 function persist(){ if(S && started && !S.over) save(RUN_KEY, S); }
 function gainPage(id){
   if(!S || S.manual.includes(id)) return;
   S.manual.push(id);
-  say('+ PÁGINA NO MANUAL: ' + PAGES[id].t, 'page');
+  say('+ PÁGINA NO MANUAL: ' + PAGES[id].t, 'page'); typing = typing.then(()=>sfx('page'));
 }
 const rec = (id, ok)=>{ if(S) S.rec.push([id, ok?1:0]); };
 const hurt = (n)=>{ S.health = Math.min(100, S.health - n); };
@@ -845,10 +873,25 @@ function musicStart(){
     musicVolume();
   }catch(e){}
 }
+/* efeitos: página nova no caderno, construção nova no bunker, conquista (seguem o volume e o mudo) */
+const SFX = { page:[[76,.07],[83,.12]], build:[[60,.07],[64,.07],[67,.07],[72,.18]], ach:[[72,.08],[76,.08],[79,.08],[84,.1],[79,.07],[84,.3]] };
+const SFX_PRI = { page:1, build:2, ach:3 };
+let sfxPending = null, sfxTimer = null;
+function sfx(kind){
+  if(!meta.music || !meta.vol) return;
+  if(!sfxPending || SFX_PRI[kind] > SFX_PRI[sfxPending]) sfxPending = kind;
+  clearTimeout(sfxTimer); sfxTimer = setTimeout(playSfx, 60);
+}
+function playSfx(){
+  const k = sfxPending; sfxPending = null; if(!k) return;
+  musicStart(); const c = MUSIC.ctx; if(!c || !MUSIC.master) return;
+  let t = c.currentTime + 0.04;
+  SFX[k].forEach(([m,d])=>{ blip('square', mtof(m), t, d*1.7, 0.2); blip('triangle', mtof(m-12), t, d*1.7, 0.14); t += d; });
+}
 function musicStop(){ if(MUSIC.timer){ clearInterval(MUSIC.timer); MUSIC.timer = null; } musicVolume(); }
 function applyMusicUI(){
   const ok = !!(window.AudioContext || window.webkitAudioContext);
-  $('#tMusic').textContent = ok ? 'Música: ' + (meta.music ? 'ligada' : 'mudo') : 'Música: indisponível';
+  $('#tMusic').textContent = ok ? 'Som: ' + (meta.music ? 'ligado' : 'mudo') : 'Som: indisponível';
   $('#tMusic').setAttribute('aria-pressed', meta.music ? 'true' : 'false'); $('#tMusic').disabled = !ok;
   $('#tVol').value = meta.vol; $('#tVol').disabled = !ok;
 }
@@ -877,8 +920,22 @@ function typeLine(text, cls){
     step();
   });
 }
+function sayCal(){
+  typing = typing.then(()=>new Promise(res=>{
+    const d = document.createElement('div'); d.className = 'cal'; d.setAttribute('role','img');
+    d.setAttribute('aria-label','Calendário: dia 1 início do Ato 1, dia 8 início do Ato 2, dia 15 início do Ato 3, dia 20 apagão');
+    for(let i=1;i<=20;i++){ const c = document.createElement('span'); c.textContent = i;
+      c.className = (i===1||i===8||i===15) ? 'start' : (i===7||i===14) ? 'end' : i===20 ? 'off' : '';
+      if(S && i===S.day) c.className += ' now';
+      c.title = i===1||i===8||i===15 ? 'Dia ' + i + ': início do Ato ' + actOf(i) : i===7||i===14 ? 'Dia ' + i + ': último dia do Ato ' + actOf(i) : i===20 ? 'Dia 20: apagão' : 'Dia ' + i;
+      d.appendChild(c); }
+    logEl.appendChild(d); trimLog(); scrollLog(); setTimeout(res, skip||RM ? 0 : 200);
+  }));
+}
 function say(text, cls='iris'){ if(cls==='iris' && S && S.blackout) cls='sys'; typing = typing.then(()=>typeLine(text, cls)); return typing; }
+const stableDay = ()=> !!S && started && (S.day===1 || S.day===8 || S.day===15);
 function glitch(t){
+  if(stableDay()) return t;
   const rate = S ? Math.min(.3, Math.max(0, (S.day-3))*0.022) : 0; if(!rate) return t;
   const g = '█▓▒░#%'; return t.split('').map(c => (c!=='\n' && c!==' ' && Math.random()<rate) ? g[Math.floor(Math.random()*g.length)] : c).join('');
 }
@@ -1062,18 +1119,28 @@ function openWater(){
   say('Estoque: ' + w.dirty + ' L para tratar · ' + (w.turva+w.clara) + ' L filtrada · ' + treated() + ' L tratada' + (w.sodis+w.sodisDuv ? ' · ' + (w.sodis+w.sodisDuv) + ' L no sol (SODIS)' : '') + '.', 'sys');
   const src = w.clara ? 'clara' : w.turva ? 'turva' : w.dirty ? 'dirty' : null;
   const list = [
-    { icon:'filtro', l: 'Filtrar', n: !S.filter ? 'monte o filtro na Oficina' : w.dirty ? Math.min(w.dirty,8) + ' L · sem gastar ação' : 'sem água para filtrar', d:!S.filter || !w.dirty, f:doFilter,
+    { icon:'filtro', l: 'Filtrar', n: !S.filter ? 'monte o filtro na Oficina' : w.dirty ? 'até ' + Math.min(w.dirty,8) + ' L · sem gastar ação' : 'sem água para filtrar', d:!S.filter || !w.dirty, f:doFilter,
       tip:'<b>Filtrar</b>Passa até 8 L de água pelo filtro. Tira a turbidez, mas não deixa a água segura para beber. Não gasta ação.' },
     { icon:'gota', l:'Desinfetar', n: src ? '1 ação · água ' + ({clara:'filtrada límpida',turva:'filtrada turva',dirty:'sem filtrar'})[src] : 'sem água para desinfetar', d:!src || S.actions<1, f:()=>disinfect(src),
       tip:'<b>Desinfetar</b>Ferver, clorar ou SODIS. Usa primeiro a água filtrada límpida, depois a turva e por último a sem filtro.' },
     back() ];
   ask(list, f, true);
 }
+/* opções de quantidade: 1, 2, 3, 4, 6, 8 litros até o máximo possível */
+function amountOpts(max, note, pick){
+  const set = [...new Set([1,2,3,4,6,8].filter(x=>x<max).concat([max]))].filter(x=>x>=1);
+  return set.map(n=>({ l: n + ' L', n: note(n), f:()=>pick(n) }));
+}
+function waterLater(){ ask([{ l:'Continuar no menu da água', f:openWater }, { l:'Voltar às ações', f:()=>idle() }]); }
 function doFilter(){
-  const w = S.water, n = Math.min(w.dirty, 8); w.dirty -= n;
-  if(S.filter.q >= 3){ w.clara += n; say(n + ' L passaram pelo filtro e saíram límpidas. Ainda não é seguro beber.', 'good'); }
-  else { w.turva += n; say(n + ' L passaram pelo filtro, mas saíram turvas. O filtro precisa de ajuste.', 'bad'); }
-  ask([{ l:'Continuar na água', f:openWater }, back()]);
+  const w = S.water, max = Math.min(w.dirty, 8);
+  say('Quantos litros passar pelo filtro? (até ' + max + ' L por vez)', 'sys');
+  ask(amountOpts(max, n=>'sobram ' + (w.dirty-n) + ' L para tratar', n=>{
+    w.dirty -= n;
+    if(S.filter.q >= 3){ w.clara += n; say(n + ' L passaram pelo filtro e saíram límpidos. Ainda não é seguro beber: falta desinfetar.', 'good'); }
+    else { w.turva += n; say(n + ' L passaram pelo filtro, mas saíram turvos. O filtro precisa de ajuste.', 'bad'); }
+    waterLater();
+  }).concat([{ l:'Voltar ao menu da água', f:openWater }]));
 }
 function takeSource(src, max){ const n = Math.min(S.water[src], max); S.water[src] -= n; return n; }
 function disinfect(src){
@@ -1087,13 +1154,15 @@ function disinfect(src){
 }
 function boil(src){
   const avail = Math.min(S.water[src], 6);
-  say('Há ' + avail + ' L para ferver. Quanto tempo de fervura?', 'sys');
+  say('Há ' + avail + ' L para ferver (até 6 L por vez na chaleira). Quanto tempo de fervura?', 'sys');
   const opt = (label, perL, kind)=>{
-    const n = Math.min(avail, Math.floor(S.energy/perL + 1e-9));
-    const total = n*perL;
-    const note = n<1 ? kwh(perL) + ' kWh por litro · energia insuficiente'
-      : kwh(perL) + ' kWh por litro · total: ' + kwh(total) + ' kWh para ' + n + ' L' + (n<avail ? ' (limitado pela energia)' : '') + ' · sobram ' + kwh(S.energy-total) + ' kWh';
-    return { l:label, n: dif().calc ? kwh(perL) + ' kWh por litro' + (n<1 ? ' · energia insuficiente' : '') : note, d:n<1, f:()=>{
+    const maxN = Math.min(avail, Math.floor(S.energy/perL + 1e-9));
+    return { l:label, n: kwh(perL) + ' kWh por litro' + (maxN<1 ? ' · energia insuficiente' : ' · energia para até ' + maxN + ' L'), d:maxN<1, f:()=>{
+      say('Quantos litros ferver?', 'sys');
+      ask(amountOpts(maxN, n=> dif().calc ? 'faça a conta da energia no próximo passo' : 'total: ' + kwh(n*perL) + ' kWh · sobram ' + kwh(S.energy - n*perL) + ' kWh', n=>boilN(n)).concat([{ l:'Voltar ao menu da água', f:openWater }]));
+    } };
+    function boilN(n){
+      const total = n*perL;
       const apply = (calcOk)=>{
         if(!useAction()) return;
         takeSource(src, n);
@@ -1108,26 +1177,30 @@ function boil(src){
           if(src==='dirty'){ mood(-5); say('A água sem filtro ficou segura, mas com gosto de barro (-5 ânimo).', 'sys'); }
           if(kind==='certo'){ gainPage('fervura'); earn('gole'); }
         }
-        idleLater();
+        waterLater();
       };
       calc('c_ferv', 'Ferver ' + n + ' L a ' + kwh(perL) + ' kWh por litro consome quantos kWh?', [nf(total) + ' kWh', nf(n+perL) + ' kWh', nf(total*2) + ' kWh'], 0, apply);
-    } };
+    }
   };
   ask([ opt('Só até aparecerem as primeiras bolhas', .25, 'bolhas'), opt('Fervura forte por cerca de 5 minutos', .5, 'certo'), opt('Ferver por 30 minutos', 1.5, 'longo'), back() ]);
 }
 function chlorine(src){
   say('Qual dose de água sanitária por litro?', 'sys');
-  const n0 = Math.min(S.water[src], 6);
+  const max = Math.min(S.water[src], 6);
   const go = (kind)=>()=>{
+    say('Quantos litros clorar? (cada uso de água sanitária trata até 6 L)', 'sys');
+    ask(amountOpts(max, n=> kind==='colher' ? n + ' colher(es) de sopa' : dif().calc ? 'faça a conta das gotas no próximo passo' : (n*2) + ' gotas no total', n=>goN(kind, n)).concat([{ l:'Voltar ao menu da água', f:openWater }]));
+  };
+  const goN = (kind, n0)=>{
     const apply = (calcOk)=>{
       if(!useAction()) return;
-      const n = takeSource(src, 6); S.inv.sanitaria--;
+      const n = takeSource(src, n0); S.inv.sanitaria--;
       rec('cloro', kind==='certo');
       if(kind==='colher'){ S.water.safe += n; hurt(5); mood(-10); say('Dose exagerada. A água ficou com cheiro forte de cloro e irritou seu estômago (-5 saúde, -10 ânimo).', 'bad'); }
       else if(kind==='rapido' || !calcOk){ S.water.duv += n; say(kind==='rapido' ? n + ' L com 2 gotas por litro, bebíveis já.' : 'Com a conta errada, a dose ficou abaixo do necessário em parte da água.', 'sys'); }
       else if(src==='clara'){ S.water.safe += n; say(n + ' L clorados. Depois de 30 minutos, prontos para beber.', 'good'); gainPage('cloracao'); earn('gole'); }
       else { const h = Math.floor(n/2); S.water.safe += h; S.water.duv += n-h; say(n + ' L clorados. A turbidez pode ter protegido parte dos micróbios.', 'sys'); }
-      idleLater();
+      waterLater();
     };
     if(kind==='colher') return apply(true);
     calc('c_cloro', 'Com 2 gotas por litro, quantas gotas para ' + n0 + ' L?', [String(n0), String(n0*2), String(n0*4)], 1, apply);
@@ -1135,19 +1208,24 @@ function chlorine(src){
   ask([ { l:'1 colher de sopa por litro', f:go('colher') }, { l:'2 gotas por litro e esperar 30 minutos', f:go('certo') }, { l:'2 gotas por litro e beber na hora', f:go('rapido') }, back() ]);
 }
 function sodis(src, cap){
-  say('Você enche as garrafas e leva até o pátio, onde bate sol. Quanto tempo deixar?', 'sys');
-  const n0 = Math.min(S.water[src], cap), bottles = Math.ceil(n0/2);
+  say('Você vai levar garrafas ao pátio, onde bate sol. Quanto tempo deixar?', 'sys');
+  const max = Math.min(S.water[src], cap);
   const go = (ok)=>()=>{
+    say('Quantos litros colocar no sol? (cada garrafa PET leva 2 L)', 'sys');
+    ask(amountOpts(max, n=> dif().calc ? 'faça a conta das garrafas no próximo passo' : Math.ceil(n/2) + ' garrafa(s)', n=>goN(ok, n)).concat([{ l:'Voltar ao menu da água', f:openWater }]));
+  };
+  const goN = (ok, n0)=>{
+    const bottles = Math.ceil(n0/2);
     const apply = (calcOk)=>{
       if(!useAction()) return;
-      let n = takeSource(src, cap);
+      let n = takeSource(src, n0);
       if(!calcOk && n>2){ const back2 = Math.floor(n/2); S.water[src] += back2; n -= back2; say('Faltaram garrafas na conta: só ' + n + ' L foram para o sol.', 'bad'); }
       rec('sodis', ok && src==='clara');
       if(ok && src==='clara'){ S.water.sodis += n; say(n + ' L ao sol. Estarão prontos amanhã cedo.', 'good'); gainPage('sodis'); earn('gole'); }
       else { S.water.sodisDuv += n; say(n + ' L ao sol. Estarão no estoque amanhã cedo.', 'sys'); }
-      idleLater();
+      waterLater();
     };
-    calc('c_sodis', 'Cada garrafa PET leva 2 L. Quantas garrafas para ' + n0 + ' L?', [String(bottles), String(n0*2), String(Math.max(1,bottles-1))], 0, apply);
+    calc('c_sodis', 'Cada garrafa PET leva 2 L. Quantas garrafas para ' + n0 + ' L?', [String(bottles), String(n0*2), String(bottles>1 ? bottles-1 : bottles+1)], 0, apply);
   };
   ask([ { l:'1 hora de sol', f:go(false) }, { l:'Cerca de 6 horas de sol pleno', f:go(true) }, back() ]);
 }
@@ -1170,7 +1248,7 @@ function openFood(){
     { icon:'brotos', l:'Brotos', n: S.sprouts ? 'germinando · ' + S.sprouts.dias + ' dia(s)' : S.inv.sementes ? '1 ação · 1 pacote de sementes' : 'falta sementes', d:!!S.sprouts || !S.inv.sementes || noAct, f:sprouts,
       tip:'<b>Brotos de feijão num pote</b>Ficam prontos em 4 dias e rendem 3 porções. Usa 1 pacote de sementes.' },
     { icon:'canteiro', l:'Canteiro', n: S.planter ? 'já plantado' : (!S.inv.terra ? 'falta terra' : !S.inv.sementes ? 'falta sementes' : '1 ação · terra + sementes'), d:!!S.planter || !S.inv.terra || !S.inv.sementes || noAct, f:planter,
-      tip:'<b>Canteiro de feijão</b>Precisa de 1 saco de terra e 1 de sementes. Cresce 1 ponto por noite e consome 1 L de água (pode ser não tratada). Com 6 pontos, colha.' },
+      tip:'<b>Canteiro de feijão</b>Precisa de 1 saco de terra e 1 de sementes. Cresce 1 ponto por noite e consome 1 L de água: usa primeiro água sem tratar e, se só houver água tratada, você escolhe na hora de dormir. Com 6 pontos, colha.' },
     { icon:'sementes', l:'Colher', n: !S.planter ? 'sem canteiro' : S.planter.growth>=6 ? '1 ação · +4 porções' : 'crescendo ' + Math.floor(S.planter.growth) + '/6', d:!S.planter || S.planter.growth<6 || noAct, f:harvest,
       tip:'<b>Colher feijão</b>Rende 4 porções. O canteiro continua produzindo depois.' },
     back() ];
@@ -1505,8 +1583,8 @@ const PDFW = { // larguras AFM (1/1000 em) dos caracteres 32–126
   H:[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584],
   HB:[278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584] };
 const CP1252 = { '€':128,'‚':130,'„':132,'…':133,'‘':145,'’':146,'“':147,'”':148,'•':149,'–':150,'—':151 };
-const PDF_SUB = { '→':'->', '⁺':'+', '★':'*', '☆':'*', '■':'', '□':'', '≠':'diferente de' };
-function pdfClean(s){ return String(s).replace(/[→⁺★☆■□≠]/g, c=>PDF_SUB[c]); }
+const PDF_SUB = { '→':'->', '⁺':'+', '★':'*', '☆':'*', '■':'', '□':'', '≠':'diferente de', '₂':'2' };
+function pdfClean(s){ return String(s).replace(/[→⁺★☆■□≠₂]/g, c=>PDF_SUB[c]); }
 function pdfBytes(s){ let o = ''; for(const ch of pdfClean(s)){ const c = ch.codePointAt(0); o += c<128 || (c>=160 && c<256) ? ch : CP1252[ch] ? String.fromCharCode(CP1252[ch]) : '?'; } return o; }
 function charW(ch, font){ const tbl = font==='HB' ? PDFW.HB : PDFW.H; let c = ch.charCodeAt(0);
   if(c<32 || c>126){ const base = ch.normalize('NFD')[0]; c = base.charCodeAt(0); if(c<32 || c>126) return 556; }
@@ -1750,6 +1828,17 @@ const EVENTS = [
       hurt(10); return ['Fumaça de incêndios invadiu o porão. Você tossiu a noite toda (-10 saúde).', 'bad']; } },
 ];
 function pickEvent(){ const pool = EVENTS.filter(e=>e.a<=act()); const tot = pool.reduce((a,e)=>a+e.w,0); let r = CUR()*tot; for(const e of pool){ r -= e.w; if(r<0) return e; } return pool[0]; }
+const untreatedL = ()=> S.water.dirty + S.water.turva + S.water.clara;
+function preSleep(){
+  S.plantTreated = false;
+  if(S.planter && untreatedL() < 1 && treated() >= 1){
+    say('O canteiro precisa de 1 L de água esta noite, mas não há água sem tratar. Usar água tratada na rega?', 'sys');
+    return ask([
+      { l:'Sim, regar com 1 L de água tratada', n:'ficam ' + (treated()-1) + ' L para beber (você bebe 2 L por noite)', f:()=>{ S.plantTreated = true; endDay(); } },
+      { l:'Não, guardar a água tratada para beber', n:'o canteiro não cresce esta noite', f:()=>endDay() } ]);
+  }
+  endDay();
+}
 function nightNext(){
   if(S.day===7 && !S.reported[1]) return [{ l:'Ver o relatório do Ato 1', f:()=>actReport(1) }];
   if(S.day===14 && !S.reported[2]) return [{ l:'Ver o relatório do Ato 2', f:()=>actReport(2) }];
@@ -1779,16 +1868,18 @@ function nightLogic(){
   }
   if(S.planter){
     let got = 0; for(const k of ['dirty','turva','clara']){ const n = Math.min(w[k], 1-got); w[k]-=n; got+=n; }
-    if(got < 1) lines.push(['O canteiro ficou sem água hoje e não cresceu (ele usa 1 L de água não tratada por noite).', 'bad']);
+    if(got < 1 && S.plantTreated){ for(const k of ['duv','safe']){ const n = Math.min(w[k], 1-got); w[k]-=n; got+=n; } if(got >= 1) lines.push(['Você regou o canteiro com 1 L de água tratada.', 'sys']); }
+    S.plantTreated = false;
+    if(got < 1) lines.push(['O canteiro ficou sem água e não cresceu. Ele usa 1 L por noite: água sem tratar serve, e se só houver água tratada você decide na hora de dormir.', 'bad']);
     else if(S.planter.ok){ S.planter.growth++; lines.push([S.planter.growth>=6 ? 'O feijão do canteiro está pronto para colher.' : 'O feijão do canteiro cresceu.', 'good']); }
-    else if(S.planter.place==='escuro') lines.push(['As mudas do canto escuro estão fracas e amareladas: falta luz para a fotossíntese.', 'bad']);
-    else if(S.planter.rega==='encharcar') lines.push(['A terra encharcada está apodrecendo as raízes: falta oxigênio.', 'bad']);
+    else if(S.planter.place==='escuro') lines.push(['As mudas do canto escuro estão fracas e amareladas: sem luz, as folhas não conseguem fazer fotossíntese com o gás carbônico do ar.', 'bad']);
+    else if(S.planter.rega==='encharcar') lines.push(['A terra encharcada está apodrecendo as raízes: sem oxigênio, elas não conseguem respirar.', 'bad']);
     else { S.planter.growth += .5; lines.push(['O canteiro cresce devagar: a terra seca entre as regas.', 'sys']); }
   }
   if(S.sprouts){ S.sprouts.dias--;
     if(S.sprouts.dias<=0){
       if(S.sprouts.dead) lines.push(['As sementes na terra seca nem germinaram: faltou água.', 'bad']);
-      else if(!S.sprouts.ok) lines.push(['Os brotos sempre submersos apodreceram: faltou oxigênio.', 'bad']);
+      else if(!S.sprouts.ok) lines.push(['Os brotos sempre submersos apodreceram: as sementes não tinham oxigênio para respirar.', 'bad']);
       else { S.food.brotos += 3; lines.push(['Os brotos de feijão estão prontos: +3 porções.', 'good']); gainPage('germinacao'); }
       S.sprouts = null; } }
   let need = 2, risk = 0;
@@ -1832,7 +1923,7 @@ const ACT_INTRO = {
      'Agora você precisa de luz sem eletricidade, de calor e de uma porta que aguente. Novos assuntos liberados comigo e na Oficina.'],
   3:['ATO 3 · HIGIENE E SAÚDE · dias 15 a 20', 'Incêndios espalham fumaça pela cidade. Sem higiene, doenças vão aparecer. A partir de agora, ferimentos podem infeccionar.',
      'Sabão, máscara e primeiros socorros. E prepare a reserva: no Dia 20 eu desligo.'] };
-function introAct(){ const [h, ...t] = ACT_INTRO[act()]; say(h, 'big'); t.forEach(x=>say(glitch(x))); }
+function introAct(){ const [h, ...t] = ACT_INTRO[act()]; say(h, 'big'); say('MENSAGEM AUTOMÁTICA · A ÍRIS acabou de sair do modo de hibernação com a bateria recarregada. Hoje a transmissão está estável: aproveite para consultá-la.', 'sys'); t.forEach(x=>say(x)); }
 function startDay(){
   S.day++; S.phase='dia'; S.actions = 3;
   S.energy = Math.max(0, energyFor(S.day) - S.nextEnergyPenalty - (S.planter && S.planter.lamp ? 1 : 0));
@@ -1844,8 +1935,8 @@ function startDay(){
   say(glitch('Bom dia, ' + NM() + '. Rede elétrica: ' + kwh(S.energy) + ' kWh hoje. Apagão previsto em ' + (20-S.day) + ' dia(s).'));
   if(S.planter && S.planter.lamp) say('A lâmpada do canteiro consumiu 1 kWh durante a noite.', 'sys');
   if(S.day===4) say('Detectei instabilidade na rede. Minhas mensagens podem chegar corrompidas. Confie cada vez mais no seu Manual.');
-  if(S.day===7 || S.day===14) say(glitch('Último dia do ato. Confira as metas antes de dormir.'));
-  if(S.day===19) say(glitch('Amanhã eu desligo. Use o dia de hoje para encher a reserva e reler o Manual.'));
+  if(S.day===7 || S.day===14) say('⚠ ÚLTIMO DIA DO ATO ' + act() + ' · Esta noite a ÍRIS hiberna e vem o teste sem IA. Confira as metas antes de dormir!', 'alert');
+  if(S.day===19) say('⚠ AMANHÃ É O DIA 20 · A ÍRIS desliga de vez. Encha a reserva de água e comida e releia o caderno hoje!', 'alert');
 }
 function checkDeath(){
   if(S.health > 0) return false;
@@ -1865,7 +1956,7 @@ function actReport(a){
   let pts = 0;
   GOALS[a].forEach(g=>{ const ok = g.ok(); if(ok) pts++; say((ok?'[✓] ':'[ ] ') + g.t, ok?'good':'bad'); });
   say('Metas cumpridas: ' + pts + '/' + GOALS[a].length + ' · Saúde: ' + S.health, 'sys');
-  say(glitch('Vou economizar energia agora. Responda sem mim: use só o seu Manual.'));
+  say(glitch('Vou entrar em modo de hibernação até o primeiro dia do próximo ato. Responda sem mim: use só o seu caderno.'));
   const idx = withRng('quiz' + a, ()=> QUIZ[a].map((_,i)=>i).sort(()=>CUR()-.5).slice(0,4));
   S.pending = { kind:'quiz', a, idx, i:0, right:0, pts };
   persist(); runQuiz();
@@ -1968,7 +2059,7 @@ function askTurma(){
       say('Digite o código exatamente como o professor passou.', 'sys');
       askInput('TURMA-1-N-0000', '', 20, code=>{
         const t = parseTurma(code);
-        if(!t){ say('Código não reconhecido. Confira as letras e os números com o professor.', 'bad'); return askTurma(); }
+        if(!t){ say(/^[A-Z0-9]{5}$/i.test(code.trim()) ? 'Esse parece um código de sessão online, mas o modo online não carregou neste site' + (window.BUNKER_OFFLINE_REASON ? ': ' + window.BUNKER_OFFLINE_REASON : '.') + ' Avise o professor. Enquanto isso, escolha "Jogar sem código".' : 'Código não reconhecido. Confira as letras e os números com o professor.', 'bad'); return askTurma(); }
         S.tc = t.code; S.seed = t.s; S.startAct = t.a;
         say('Código aceito: começa no Ato ' + t.a + (t.s ? ' · eventos iguais para a turma' : '') + (t.d!=='L' ? ' · ' + DIF[t.d].nome : '') + '.', 'good');
         if(t.d==='L') askDif(); else { S.dif = t.d; begin(); }
@@ -2020,6 +2111,13 @@ function begin(){
     say('Pelos meus cálculos, a rede elétrica aguenta uns 20 dias. Depois disso eu desligo.');
     say('Você tem 3 ações por dia. Falar comigo não gasta ação, mas gasta energia. Tudo o que aprender vai para o Manual, no Caderno.');
     say('ATO 1 · ÁGUA E ALIMENTO. Você tem 2 L de água tratada, 2 latas e algumas bananas.');
+    say('CALENDÁRIO DA SOBREVIVÊNCIA', 'big');
+    sayCal();
+    say('DIA 1 · INÍCIO DO ATO 1 · Água e alimento', 'alert');
+    say('DIA 8 · INÍCIO DO ATO 2 · Energia e abrigo', 'alert');
+    say('DIA 15 · INÍCIO DO ATO 3 · Higiene e saúde', 'alert');
+    say('DIA 20 · APAGÃO · a ÍRIS desliga', 'alert');
+    say('Nos dias de início de ato a ÍRIS sai da hibernação e a transmissão fica estável: é o melhor dia para consultá-la. No último dia de cada ato (Dias 7 e 14) vem o teste sem IA.', 'sys');
   } else {
     say('Você já sobreviveu ' + (S.day-1) + ' dias neste porão. O bunker tem filtro, canteiro e um pouco de reserva.' + (S.startAct===3 ? ' Também há lamparina, isolamento e porta reforçada.' : ''));
     say('Faltam ' + (20-S.day) + ' dias até o apagão. Eu sou a ÍRIS e ainda posso ajudar.');
@@ -2035,6 +2133,7 @@ function titleScreen(){
   say('ZUMBIS NÃO SABEM QUÍMICA', 'big');
   say('Um jogo de sobrevivência sobre a química do dia a dia: água, comida, energia, abrigo, higiene e saúde.', 'sys');
   say('3 atos · 20 dias · no Dia 20 a IA desliga.', 'sys');
+  if(window.BUNKER_OFFLINE_REASON) say('Modo online indisponível: ' + window.BUNKER_OFFLINE_REASON + ' Dá para jogar normalmente no modo sozinho.', 'bad');
   titleMenu();
 }
 function titleMenu(){
@@ -2058,8 +2157,8 @@ const ACTIONS = [
   { id:'aFood', icon:'canteiro', l:'Comida', f:()=>openFood(), tip:()=>'<b>Comida</b>Conservar alimentos frescos, germinar brotos, plantar e colher o canteiro. Você come 1 porção por noite.', sub:()=> S.fresh.some(x=>x.dias<=1) ? 'estragando!' : 'horta' },
   { id:'aWork', icon:'martelo', l:'Oficina', f:()=>{ if(needActions()) return; openWork(); }, tip:()=>'<b>Oficina</b>Construir o filtro e, nos próximos atos, lamparina, pilha, isolamento, porta, sabão, máscara e kit. Passe o mouse em cada projeto para ver os materiais.', sub:()=> S.wound ? 'ferida!' : 'construir' },
   { id:'aMan', icon:'caderno', l:'Caderno', f:()=>openBook(), tip:()=>'<b>Caderno</b>O caderno desta partida (começa em branco a cada jogo), conquistas, certificado em PDF e código de resultado. Entre as partidas, dá para revisar os cadernos anteriores.', sub:()=> S.manual.length + '/' + PAGE_ORDER.length },
-  { id:'aEnd', icon:'lua', l:'Dormir', end:true, f:()=>{ startFlow(); say('Encerrar o dia agora?' + (S.actions ? ' Você ainda tem ' + S.actions + ' ação(ões).' : ''), 'sys'); ask([{ l:'Sim, dormir', f:endDay }, { l:'Não, continuar o dia', f:()=>idle() }]); },
-    tip:()=>'<b>Encerrar o dia</b>À noite você bebe 2 L de água, come 1 porção, a horta cresce, a comida fresca envelhece e algo pode acontecer.', sub:()=>'noite' },
+  { id:'aEnd', icon:'lua', l:'Dormir', end:true, f:()=>{ startFlow(); if(S.day===7 || S.day===14) say('⚠ ÚLTIMA NOITE DO ATO ' + act() + ' · Depois de dormir vêm o relatório de metas e o teste sem IA.', 'alert'); if(S.day===19) say('⚠ ÚLTIMA NOITE COM A ÍRIS · Amanhã é o apagão.', 'alert'); say('Encerrar o dia agora?' + (S.actions ? ' Você ainda tem ' + S.actions + ' ação(ões).' : ''), 'sys'); ask([{ l:'Sim, dormir', f:preSleep }, { l:'Não, continuar o dia', f:()=>idle() }]); },
+    tip:()=>'<b>Encerrar o dia</b>À noite você bebe 2 L de água, come 1 porção, a horta cresce, a comida fresca envelhece e algo pode acontecer.' + ([7,14].includes(S.day) ? '<br><span class="ok" style="color:var(--warn)">Hoje é o último dia do ato: depois de dormir vem o teste sem IA.</span>' : ''), sub:()=>'noite' },
 ];
 const actBox = $('#actions');
 ACTIONS.forEach(a=>{
@@ -2118,13 +2217,19 @@ function renderInv(){
     box.appendChild(sec);
   });
 }
+let prevBuilt = null;
+const builtSet = s => ({ filtro:!!s.filter, canteiro:!!s.planter, brotos:!!s.sprouts, lamparina:!!(s.lamp && s.lamp.ok), pilha:!!s.batteryOk,
+  isolamento:!!(s.insul && s.insul.ok), porta:!!s.barricade, sabao:!!(s.soapCure || s.soapMade), mascara:!!s.mask, kit:!!s.kit });
 function render(){
   const s = S; if(!s) return;
+  if(started && !s.over){ const b = builtSet(s); if(prevBuilt && Object.keys(b).some(k=>b[k] && !prevBuilt[k])) typing = typing.then(()=>sfx('build')); prevBuilt = b; }
+  else prevBuilt = null;
   const live = started && !s.over && s.phase==='dia';
   const A = actOf(s.day);
   $('#actName').textContent = 'ATO ' + A + ' · ' + ACTS[A].nome;
   [...$('#actBar').children].forEach((el,i)=>el.className = i < A ? 'on' : '');
-  $('#hDay').textContent = s.day + '/20';
+  $('#hDay').textContent = s.day + '/20' + (started && [7,14,19].includes(s.day) ? ' ⚠' : '');
+  $('#hDay').classList.toggle('warnday', started && [7,14,19].includes(s.day));
   $('#hAct').innerHTML = [0,1,2].map(i=>'<b class="' + (i < s.actions ? '' : 'off') + '"></b>').join('');
   $('#hEn').textContent = kwh(s.energy) + ' kWh';
   $('#bEn').style.width = Math.max(0, Math.min(100, s.energy/energyMax()*100)) + '%';
@@ -2136,7 +2241,7 @@ function render(){
   $('#hFo').textContent = (s.food.latas + s.food.conservas + s.food.brotos + s.fresh.reduce((a,x)=>a+x.porcoes,0)) + ' porç.';
   $('#term').classList.toggle('off', !!s.blackout);
   $('#tName').textContent = s.blackout ? 'Diário de ' + NM() + ' · sem energia' : 'ÍRIS v2.3' + (s.name ? ' · com ' + s.name : ' · assistente de sobrevivência');
-  $('#tStatus').textContent = s.blackout ? 'DESLIGADO' : !started ? 'AGUARDANDO' : s.over ? 'ECONOMIA' : s.day>=4 ? 'INSTÁVEL' : 'ONLINE';
+  $('#tStatus').textContent = s.blackout ? 'DESLIGADO' : !started ? 'AGUARDANDO' : s.over ? 'ECONOMIA' : stableDay() && s.day>1 ? 'ESTÁVEL' : s.day>=4 ? 'INSTÁVEL' : 'ONLINE';
   ACTIONS.forEach(a=>{ a.el.disabled = a.id==='aMan' ? false : !live; a.el.querySelector('small').textContent = a.sub(); setTip(a.el, a.tip());
     a.el.classList.toggle('warn', (a.id==='aWork' && !!s.wound) || (a.id==='aFood' && s.fresh.some(x=>x.dias<=1))); });
   $('#goalsTitle').textContent = 'METAS DO ATO ' + A + (started && s.dif!=='N' ? ' · ' + (s.dif==='F' ? 'FÁCIL' : 'DIFÍCIL') : '');

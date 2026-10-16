@@ -123,21 +123,29 @@ const DIFN = { F:'Fácil (9º ano)', N:'Normal', D:'Difícil (EM)', L:'Livre' };
 const ONLINE_MS = 90 * 1000;
 let current = null, confirming = false, lastDetail = null, USER = null, OFFSET = 0;
 let SESS = {}, PLAYERS = {}; const LISTEN = {};
-const fbOk = window.firebase && window.FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && !/COLE/.test(FIREBASE_CONFIG.apiKey);
+const EMBED = {"apiKey":"AIzaSyDJ3QnU0J8QYHuwJdE3nCOCceVJjCeKCEU","authDomain":"zumbis-nao-sabem-quimica.firebaseapp.com","databaseURL":"https://zumbis-nao-sabem-quimica-default-rtdb.firebaseio.com","projectId":"zumbis-nao-sabem-quimica","storageBucket":"zumbis-nao-sabem-quimica.firebasestorage.app","messagingSenderId":"226998541020","appId":"1:226998541020:web:4e411300485701fffdf219"};
+const cfgOk = c => !!(c && c.apiKey && c.databaseURL && !/COLE/.test(c.apiKey));
+let CFG = window.FIREBASE_CONFIG;
+if(!cfgOk(CFG) && typeof firebaseConfig !== 'undefined' && cfgOk(firebaseConfig)) CFG = firebaseConfig;
+if(!cfgOk(CFG) && cfgOk(EMBED)) CFG = EMBED;
+const fbOk = !!window.firebase && cfgOk(CFG);
 let auth = null, db = null;
-if(fbOk){ firebase.initializeApp(FIREBASE_CONFIG); auth = firebase.auth(); db = firebase.database(); }
+if(fbOk){ firebase.initializeApp(CFG); auth = firebase.auth(); db = firebase.database(); }
 const now = ()=> Date.now() + OFFSET;
 
 function showLogin(msg, err){ $('#app').hidden = true; $('#loginBox').hidden = false; $('#loginMsg').textContent = msg || ''; $('#loginMsg').className = 'msg' + (err ? ' err' : ''); }
 $('#googleBtn').onclick = async ()=>{
-  if(!fbOk) return showLogin('O Firebase ainda não foi configurado: preencha o arquivo firebase-config.js (veja o LEIA-ME).', true);
+  if(!fbOk) return showLogin(window.firebase ? 'O Firebase ainda não foi configurado: confira o arquivo firebase-config.js (veja o LEIA-ME).' : 'Não foi possível carregar o Firebase: confira a internet (a rede da escola pode bloquear gstatic.com).', true);
   $('#loginMsg').textContent = 'Abrindo a janela do Google…';
   try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
   catch(e){
     const m = { 'auth/popup-blocked':'O navegador bloqueou a janela do Google. Permita pop-ups para este site e tente de novo.',
       'auth/popup-closed-by-user':'A janela do Google foi fechada antes de terminar.',
       'auth/unauthorized-domain':'Este endereço ainda não foi autorizado no Firebase (Authentication > Configurações > Domínios autorizados).',
-      'auth/operation-not-allowed':'O login com Google não está ativado no Firebase (Authentication > Método de login).' }[e.code];
+      'auth/operation-not-allowed':'O login com Google não está ativado no Firebase (Authentication > Método de login).',
+      'auth/api-key-not-valid.-please-pass-a-valid-api-key.':'A chave (apiKey) do Firebase está incorreta: copie de novo em Configurações do projeto.',
+      'auth/invalid-api-key':'A chave (apiKey) do Firebase está incorreta: copie de novo em Configurações do projeto.',
+      'auth/network-request-failed':'Sem conexão com a internet, ou a rede bloqueia o Google.' }[e.code];
     showLogin(m || ('Não foi possível entrar: ' + (e.message || e.code)), true);
   }
 };
