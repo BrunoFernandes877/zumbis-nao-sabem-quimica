@@ -1,7 +1,7 @@
 # 🧟 Zumbis Não Sabem Química
 ### 20 dias para transformar um porão em bunker com a Química
 
-**▶ [Clique aqui para jogar](LINK-DO-JOGO)**
+**▶ [Clique aqui para jogar](https://brunofernandes877.github.io/zumbis-nao-sabem-quimica/)**
 
 Jogo digital educativo de sobrevivência para o 9º ano do Ensino Fundamental e o Ensino Médio. Roda direto no navegador, no computador, tablet ou celular, sem instalar nada.
 
