@@ -5,7 +5,7 @@
 
 Jogo digital educativo de sobrevivência para o 9º ano do Ensino Fundamental e o Ensino Médio. Roda direto no navegador, no computador, tablet ou celular, sem instalar nada.
 
-> **Autoria:** desenvolvido por **Bruno Oliva Fernandes** para a disciplina de **Estágio Supervisionado II no Ensino Fundamental** da **Universidade Federal do ABC (UFABC)** sob orientação da Profª Drª Kenia Naara Parra, no período **2026.3**.
+> **Autoria:** desenvolvido pelo licenciando **Bruno Oliva Fernandes** para a disciplina de **Estágio Supervisionado II no Ensino Fundamental** da **Universidade Federal do ABC (UFABC)** sob orientação da Profª Drª Kenia Naara Parra, no período **2026.3**.
 >
 > **Origem:** remix do REA *"Sobrevivência Humana: Ciência para Viver em Um Mundo Hostil"*, de **Gilciara Paixão Gonçalves** (repositório Aquarela, 2026), baseado no livro *Conhecimentos Químicos que Você Precisa para Sobreviver ao Apocalipse Zumbi* (UFPR, 2021).
 
