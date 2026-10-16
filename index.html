@@ -48,7 +48,7 @@
 })();
 </script>
 
-<title>Bunker 20</title>
+<title>Zumbis Não Sabem Química</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
@@ -71,7 +71,7 @@ body{color:var(--fg);font-family:var(--f-term);font-size:20px;line-height:1.15}
 img.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 
 .hud{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;background:var(--panel);border:2px solid var(--line);padding:10px 14px}
-.brand{font-family:var(--f-display);font-size:14px;color:var(--amber);letter-spacing:.06em}
+.brand{font-family:var(--f-display);font-size:12px;line-height:1.4;color:var(--amber);letter-spacing:.06em}
 .brand small{display:block;font-family:var(--f-term);font-size:17px;color:var(--dim);letter-spacing:.04em;margin-top:6px}
 .stat{display:grid;gap:3px;min-width:84px}
 .stat .k{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
@@ -227,7 +227,7 @@ th{color:var(--dim);font-weight:normal;text-transform:uppercase;font-size:15px;l
 
 <div class="wrap">
   <header class="hud" id="hud">
-    <div class="brand">BUNKER 20<small id="actName">ATO 1 · ÁGUA E ALIMENTO</small><div class="acts" id="actBar"><i></i><i></i><i></i></div></div>
+    <div class="brand">ZUMBIS NÃO SABEM QUÍMICA<small id="actName">ATO 1 · ÁGUA E ALIMENTO</small><div class="acts" id="actBar"><i></i><i></i><i></i></div></div>
     <div class="stat"><span class="k">Dia</span><span class="v" id="hDay">—</span></div>
     <div class="stat"><span class="k">Ações</span><span class="pips" id="hAct"></span></div>
     <div class="stat" style="min-width:120px"><span class="k">Rede elétrica</span><span class="v" id="hEn">—</span><span class="bar"><i id="bEn"></i></span></div>
@@ -1548,7 +1548,7 @@ function makePDF(draw){
   objs.forEach((o,i)=>{ offs.push(out.length); out += (i+1) + ' 0 obj\n' + o + '\nendobj\n'; });
   const xref = out.length;
   out += 'xref\n0 ' + (objs.length+1) + '\n0000000000 65535 f \n' + offs.map(o=>String(o).padStart(10,'0') + ' 00000 n \n').join('');
-  out += 'trailer\n<< /Size ' + (objs.length+1) + ' /Root 1 0 R /Info << /Title (' + pdfBytes('Certificado Bunker 20') + ') /Producer (Bunker 20) >> >>\nstartxref\n' + xref + '\n%%EOF';
+  out += 'trailer\n<< /Size ' + (objs.length+1) + ' /Root 1 0 R /Info << /Title (' + pdfBytes('Certificado · Zumbis Não Sabem Química') + ') /Producer (' + pdfBytes('Zumbis Não Sabem Química') + ') >> >>\nstartxref\n' + xref + '\n%%EOF';
   const bytes = new Uint8Array(out.length); for(let i=0;i<out.length;i++) bytes[i] = out.charCodeAt(i) & 255;
   return bytes;
 }
@@ -1556,17 +1556,17 @@ function certPDF(m){
   const PAPER=[239,230,207], INK=[42,35,24], RED=[181,67,47], BROWN=[138,117,80], DIM=[90,77,54];
   return makePDF(p=>{
     const frame = ()=>{ p.rect(0,0,210,297,{fill:PAPER}); p.rect(10,10,190,277,{stroke:BROWN,lw:1}); p.rect(12.5,12.5,185,272,{stroke:BROWN,lw:.4}); };
-    const foot = (n)=>{ p.text('Bunker 20 · Manual de Sobrevivência Científica · ' + m.nome, 105, 280, {size:8, color:DIM, align:'center'}); p.text(String(n), 192, 280, {size:8, color:DIM, align:'right'}); };
+    const foot = (n)=>{ p.text('Zumbis Não Sabem Química · Manual de Sobrevivência Científica · ' + m.nome, 105, 280, {size:8, color:DIM, align:'center'}); p.text(String(n), 192, 280, {size:8, color:DIM, align:'right'}); };
     // página 1: certificado
     p.page(); frame();
-    p.text('BUNKER 20', 105, 34, {font:'HB', size:12, color:BROWN, align:'center'});
+    p.text('ZUMBIS NÃO SABEM QUÍMICA', 105, 34, {font:'HB', size:12, color:BROWN, align:'center'});
     p.text('CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA', 105, 46, {font:'HB', size:17, color:INK, align:'center'});
     p.line(50,52,160,52,BROWN,.5);
     p.text('Certificamos que', 105, 70, {size:12, color:DIM, align:'center'});
     let ns = 26; while(p.textW(m.nome,'HB',ns) > 160 && ns > 12) ns -= 1;
     p.text(m.nome, 105, 86, {font:'HB', size:ns, color:RED, align:'center'});
     let y = 100;
-    p.wrap('enfrentou o apocalipse no Bunker 20 usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde, até o dia em que a inteligência artificial desligou.', 'H', 12, 150)
+    p.wrap('enfrentou o apocalipse zumbi trancado num bunker, usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde, até o dia em que a inteligência artificial desligou.', 'H', 12, 150)
       .forEach(l=>{ p.text(l, 105, y, {size:12, color:INK, align:'center'}); y += 6.5; });
     y += 8;
     p.rect(35, y, 140, 30, {fill:[246,240,224], stroke:BROWN, lw:.4});
@@ -1646,7 +1646,7 @@ function certHTML(m){
   return '<div class="cert">'
     + '<h1>CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA</h1>'
     + '<div>Certificamos que</div><div class="who">' + esc(m.nome) + '</div>'
-    + '<div>enfrentou o apocalipse no Bunker 20 usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde.</div>'
+    + '<div>enfrentou o apocalipse zumbi trancado num bunker, usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde.</div>'
     + '<div class="meta"><span>Resultado: <b>' + esc(m.status) + '</b></span><span>Dificuldade: ' + esc(m.dif) + '</span><span>Data: ' + esc(m.data) + '</span><span>Manual: ' + m.pages.length + '/' + PAGE_ORDER.length + ' páginas</span></div>'
     + '<div class="stamp">ÍRIS · VERIFICADO</div>'
     + (m.ach.length ? '<h4>CONQUISTAS</h4><ul>' + m.ach.map(id=>'<li><b>' + esc(ACH[id].t) + '</b> · ' + esc(ACH[id].d) + '</li>').join('') + '</ul>' : '')
@@ -1655,7 +1655,7 @@ function certHTML(m){
     + '</div>';
 }
 function certText(m){
-  return ['CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA · BUNKER 20', 'Estudante: ' + m.nome, 'Resultado: ' + m.status, 'Dificuldade: ' + m.dif, 'Data: ' + m.data, '',
+  return ['CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA · ZUMBIS NÃO SABEM QUÍMICA', 'Estudante: ' + m.nome, 'Resultado: ' + m.status, 'Dificuldade: ' + m.dif, 'Data: ' + m.data, '',
     'CONQUISTAS', ...(m.ach.length ? m.ach.map(id=>'- ' + ACH[id].t + ': ' + ACH[id].d) : ['- nenhuma']), '',
     'PÁGINAS DO MANUAL (' + m.pages.length + '/' + PAGE_ORDER.length + ')', ...m.pages.map(id=>'\n' + PAGES[id].t.toUpperCase() + '\n' + PAGES[id].x)].join('\n');
 }
@@ -1669,7 +1669,7 @@ function openCert(){
   $('#certCopy').onclick = ()=> copyText(certText(m), ok=> $('#certMsg').textContent = ok ? 'Texto copiado.' : 'Não foi possível copiar aqui. Selecione o texto do certificado e copie.');
   $('#certDl').onclick = async ()=>{
     if(!canSave()){ $('#certMsg').textContent = 'O download não está disponível nesta visualização. Use "Copiar texto".'; return; }
-    const fname = 'Certificado-Bunker20-' + (m.nome.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'estudante') + '.pdf';
+    const fname = 'Certificado-ZumbisNaoSabemQuimica-' + (m.nome.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'estudante') + '.pdf';
     try{ $('#certMsg').textContent = 'Gerando o PDF…'; await saveFile(fname, certPDF(m), 'application/pdf'); $('#certMsg').textContent = 'PDF enviado para download: ' + fname; }
     catch(e){ $('#certMsg').textContent = e && e.code==='declined' ? 'Download cancelado.' : 'Não foi possível baixar aqui. Use "Copiar texto".'; }
   };
@@ -1728,7 +1728,7 @@ function renderResults(){
       return [o.n, o.t, (DIF[o.dif]||DIF.N).nome, o.d, endTxt(o), o.sc ?? '', o.pg, p ?? '', n, (o.ach||[]).map(a=>ACH[a]?ACH[a].t:a).join(' / '), ...Object.keys(CATS).map(k=> per[k] ? pct(per[k].ok, per[k].n) : '')]
         .map(x=>'"' + String(x).replace(/"/g,'""') + '"').join(';');
     });
-    try{ await saveFile('resultados-bunker20.csv', '﻿' + [head.join(';'), ...lines].join('\n'), 'text/csv'); $('#resMsg').textContent = 'Planilha enviada para download.'; }
+    try{ await saveFile('resultados-zumbis-nao-sabem-quimica.csv', '﻿' + [head.join(';'), ...lines].join('\n'), 'text/csv'); $('#resMsg').textContent = 'Planilha enviada para download.'; }
     catch(e){ $('#resMsg').textContent = e && e.code==='declined' ? 'Download cancelado.' : 'Download indisponível aqui.'; }
   };
 }
@@ -2032,7 +2032,7 @@ function begin(){
 }
 function titleScreen(){
   S = newRun(); started = false; render();
-  say('BUNKER 20', 'big');
+  say('ZUMBIS NÃO SABEM QUÍMICA', 'big');
   say('Um jogo de sobrevivência sobre a química do dia a dia: água, comida, energia, abrigo, higiene e saúde.', 'sys');
   say('3 atos · 20 dias · no Dia 20 a IA desliga.', 'sys');
   titleMenu();

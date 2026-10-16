@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Bunker 20 · Painel do professor</title>
+<title>Zumbis Não Sabem Química · Painel do professor</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
 <style>
 /* Painel do professor: mesma identidade do jogo (terminal âmbar, pixel), organizado em sessões à esquerda e detalhe à direita */
@@ -64,7 +64,7 @@ th{color:var(--dim);font-weight:normal;text-transform:uppercase;font-size:15px;l
 <div class="wrap">
 
   <section class="card login" id="loginBox">
-    <h1>BUNKER 20 · PAINEL DO PROFESSOR</h1>
+    <h1>ZUMBIS NÃO SABEM QUÍMICA · PAINEL DO PROFESSOR</h1>
     <p class="msg">Acesso restrito ao professor. Entre com a sua conta Google: você verá apenas as sessões que você mesmo criar.</p>
     <div class="row"><button class="btn" type="button" id="googleBtn">Entrar com Google</button><a class="msg" href="index.html">Voltar ao jogo</a></div>
     <span class="msg" id="loginMsg" role="alert"></span>
@@ -264,7 +264,7 @@ function downloadCSV(d, rows){
       .map(x=>'"' + String(x).replace(/"/g,'""') + '"').join(';');
   });
   const blob = new Blob(['﻿' + [head.join(';'), ...lines].join('\n')], { type:'text/csv' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bunker20-' + d.code + '-' + new Date().toISOString().slice(0,10) + '.csv';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'zumbis-nao-sabem-quimica-' + d.code + '-' + new Date().toISOString().slice(0,10) + '.csv';
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
 }
 </script>
