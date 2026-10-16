@@ -1,5 +1,54 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Zumbis Não Sabem Química</title>
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html{color-scheme:light}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+/* Motor Firebase do Bunker 20: estudantes entram com login anônimo (sem senha, sem e-mail)
+   e gravam só o próprio registro em players/<sessão>/<id>. As regras do banco garantem isso. */
+(function(){
+  const cfg = window.FIREBASE_CONFIG;
+  if(!window.firebase || !cfg || !cfg.apiKey || /COLE/.test(cfg.apiKey)){ console.warn('Bunker 20: Firebase não configurado, jogo em modo offline.'); return; }
+  firebase.initializeApp(cfg);
+  const auth = firebase.auth(), db = firebase.database(), TS = firebase.database.ServerValue.TIMESTAMP;
+  let ready = null;
+  const me = ()=> ready || (ready = new Promise((res, rej)=>{
+    const off = auth.onAuthStateChanged(u=>{ if(u){ off(); res(u); } else auth.signInAnonymously().catch(e=>{ ready = null; rej(new Error('Não consegui conectar. Confira a internet.')); }); });
+  }));
+  const ended = ()=>{ const e = new Error('A sessão foi encerrada pelo professor.'); e.ended = true; return e; };
+  const pref = (sid, uid)=> db.ref('players/' + sid + '/' + uid);
+  window.BUNKER_BACKEND = {
+    adminUrl: 'admin.html', interval: 30000,
+    async join(code, nick){
+      const u = await me();
+      const c = await db.ref('codes/' + code).get();
+      if(!c.exists()) throw new Error('Sessão não encontrada. Confira o código com o professor.');
+      const sid = c.val();
+      const ss = await db.ref('sessions/' + sid).get();
+      if(!ss.exists()) throw new Error('Sessão não encontrada. Confira o código com o professor.');
+      const s = ss.val(), r = pref(sid, u.uid), prev = await r.get();
+      if(s.closed && !prev.exists()) throw new Error('Esta sessão foi encerrada pelo professor.');
+      nick = String(nick || '').replace(/[<>"'`\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24) || 'Sobrevivente';
+      await r.update({ nick, joinedAt: (prev.exists() && prev.val().joinedAt) || TS, lastSeen: TS, online: true });
+      r.onDisconnect().update({ online: false, lastSeen: TS });
+      return { token: sid, nick, session: { code, name: s.name, act: s.act, dif: s.dif, seed: s.seed || 0 } };
+    },
+    async resume(sid){
+      const u = await me(), r = pref(sid, u.uid);
+      await r.update({ online: true, lastSeen: TS });
+      r.onDisconnect().update({ online: false, lastSeen: TS });
+    },
+    async beat(sid, state, report){
+      const u = await me();
+      try{ await pref(sid, u.uid).update({ state, report: JSON.stringify(report), lastSeen: TS, online: true }); }
+      catch(e){ const s = await db.ref('sessions/' + sid).get().catch(()=>null); if(s && !s.exists()) throw ended(); throw e; }
+    },
+    leave(){ /* o próprio Firebase marca offline quando a aba fecha (onDisconnect) */ }
+  };
+})();
+</script>
+
+<title>Bunker 20</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
@@ -178,7 +227,7 @@ th{color:var(--dim);font-weight:normal;text-transform:uppercase;font-size:15px;l
 
 <div class="wrap">
   <header class="hud" id="hud">
-    <div class="brand">ZUMBIS NÃO<br>SABEM QUÍMICA<small id="actName">ATO 1 · ÁGUA E ALIMENTO</small><div class="acts" id="actBar"><i></i><i></i><i></i></div></div>
+    <div class="brand">BUNKER 20<small id="actName">ATO 1 · ÁGUA E ALIMENTO</small><div class="acts" id="actBar"><i></i><i></i><i></i></div></div>
     <div class="stat"><span class="k">Dia</span><span class="v" id="hDay">—</span></div>
     <div class="stat"><span class="k">Ações</span><span class="pips" id="hAct"></span></div>
     <div class="stat" style="min-width:120px"><span class="k">Rede elétrica</span><span class="v" id="hEn">—</span><span class="bar"><i id="bEn"></i></span></div>
@@ -1499,7 +1548,7 @@ function makePDF(draw){
   objs.forEach((o,i)=>{ offs.push(out.length); out += (i+1) + ' 0 obj\n' + o + '\nendobj\n'; });
   const xref = out.length;
   out += 'xref\n0 ' + (objs.length+1) + '\n0000000000 65535 f \n' + offs.map(o=>String(o).padStart(10,'0') + ' 00000 n \n').join('');
-  out += 'trailer\n<< /Size ' + (objs.length+1) + ' /Root 1 0 R /Info << /Title (' + pdfBytes('Certificado Zumbis Não Sabem Química') + ') /Producer (' + pdfBytes('Zumbis Não Sabem Química') + ') >> >>\nstartxref\n' + xref + '\n%%EOF';
+  out += 'trailer\n<< /Size ' + (objs.length+1) + ' /Root 1 0 R /Info << /Title (' + pdfBytes('Certificado Bunker 20') + ') /Producer (Bunker 20) >> >>\nstartxref\n' + xref + '\n%%EOF';
   const bytes = new Uint8Array(out.length); for(let i=0;i<out.length;i++) bytes[i] = out.charCodeAt(i) & 255;
   return bytes;
 }
@@ -1507,17 +1556,17 @@ function certPDF(m){
   const PAPER=[239,230,207], INK=[42,35,24], RED=[181,67,47], BROWN=[138,117,80], DIM=[90,77,54];
   return makePDF(p=>{
     const frame = ()=>{ p.rect(0,0,210,297,{fill:PAPER}); p.rect(10,10,190,277,{stroke:BROWN,lw:1}); p.rect(12.5,12.5,185,272,{stroke:BROWN,lw:.4}); };
-    const foot = (n)=>{ p.text('Zumbis Não Sabem Química · Manual de Sobrevivência Científica · ' + m.nome, 105, 280, {size:8, color:DIM, align:'center'}); p.text(String(n), 192, 280, {size:8, color:DIM, align:'right'}); };
+    const foot = (n)=>{ p.text('Bunker 20 · Manual de Sobrevivência Científica · ' + m.nome, 105, 280, {size:8, color:DIM, align:'center'}); p.text(String(n), 192, 280, {size:8, color:DIM, align:'right'}); };
     // página 1: certificado
     p.page(); frame();
-    p.text('ZUMBIS NÃO SABEM QUÍMICA', 105, 34, {font:'HB', size:12, color:BROWN, align:'center'});
+    p.text('BUNKER 20', 105, 34, {font:'HB', size:12, color:BROWN, align:'center'});
     p.text('CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA', 105, 46, {font:'HB', size:17, color:INK, align:'center'});
     p.line(50,52,160,52,BROWN,.5);
     p.text('Certificamos que', 105, 70, {size:12, color:DIM, align:'center'});
     let ns = 26; while(p.textW(m.nome,'HB',ns) > 160 && ns > 12) ns -= 1;
     p.text(m.nome, 105, 86, {font:'HB', size:ns, color:RED, align:'center'});
     let y = 100;
-    p.wrap('enfrentou o apocalipse zumbi usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde, até o dia em que a inteligência artificial desligou.', 'H', 12, 150)
+    p.wrap('enfrentou o apocalipse no Bunker 20 usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde, até o dia em que a inteligência artificial desligou.', 'H', 12, 150)
       .forEach(l=>{ p.text(l, 105, y, {size:12, color:INK, align:'center'}); y += 6.5; });
     y += 8;
     p.rect(35, y, 140, 30, {fill:[246,240,224], stroke:BROWN, lw:.4});
@@ -1552,24 +1601,27 @@ function certPDF(m){
   });
 }
 
-/* ================== versão online (só quando o jogo roda no servidor da turma) ================== */
-const NET = { on: !!window.BUNKER_SERVER, timer:null, solo:false };
-async function api(path, body){
-  const r = await fetch(path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
-  let j = {}; try{ j = await r.json(); }catch(e){}
-  if(!r.ok) throw new Error(j.error || 'O servidor não respondeu. Confira a conexão.');
-  return j;
-}
-function netState(){ return { day:S.day, act:actOf(S.day), hp:Math.max(0,S.health), phase:S.phase, end:S.end, notes:S.manual.length }; }
+/* ================== versão online ==================
+   O jogo não sabe com quem conversa: a página publicada injeta um "motor" em window.BUNKER_BACKEND
+   (servidor Node da turma ou Firebase), com join(código, nick), beat(token, estado, relatório),
+   resume(token) e leave(token). Sem motor, o jogo funciona offline. */
+const NET = { on: !!window.BUNKER_BACKEND, b: window.BUNKER_BACKEND || null, timer:null, solo:false };
+const adminUrl = ()=> (NET.b && NET.b.adminUrl) || '/admin';
+function netState(){ return { day:S.day, act:actOf(S.day), hp:Math.max(0,S.health), phase:S.phase, end:S.end || '', notes:S.manual.length }; }
 function netBeat(){
   if(!NET.on || !S || !S.netToken) return;
-  api('/api/beat', { token:S.netToken, state:netState(), report:buildReport() })
+  Promise.resolve().then(()=>NET.b.beat(S.netToken, netState(), buildReport()))
     .then(()=>{ $('#tNet').textContent = 'Online · ' + S.tc.replace('SESSÃO ','sessão '); $('#tNet').hidden = false; })
-    .catch(e=>{ $('#tNet').textContent = 'Sem conexão'; $('#tNet').hidden = false; if(/sessão|expirou|encerrada/i.test(e.message)){ S.netToken = null; netStop(); say('A sessão foi encerrada pelo professor. Você pode continuar jogando sozinho.', 'sys'); } });
+    .catch(e=>{ $('#tNet').textContent = 'Sem conexão'; $('#tNet').hidden = false;
+      if(e && e.ended){ S.netToken = null; netStop(); say('A sessão foi encerrada pelo professor. Você pode continuar jogando sozinho.', 'sys'); persist(); } });
 }
-function netStart(){ netStop(); if(!NET.on || !S || !S.netToken) return; netBeat(); NET.timer = setInterval(netBeat, 15000); }
+function netStart(){
+  netStop(); if(!NET.on || !S || !S.netToken) return;
+  Promise.resolve().then(()=> NET.b.resume ? NET.b.resume(S.netToken) : null).catch(()=>{}).then(netBeat);
+  NET.timer = setInterval(netBeat, NET.b.interval || 15000);
+}
 function netStop(){ if(NET.timer) clearInterval(NET.timer); NET.timer = null; $('#tNet').hidden = true; }
-if(NET.on) addEventListener('pagehide', ()=>{ if(S && S.netToken && navigator.sendBeacon) navigator.sendBeacon('/api/leave', new Blob([JSON.stringify({ token:S.netToken })], { type:'application/json' })); });
+if(NET.on) addEventListener('pagehide', ()=>{ if(S && S.netToken && NET.b.leave) try{ NET.b.leave(S.netToken); }catch(e){} });
 
 /* ================== certificado ================== */
 let DL = null;
@@ -1594,7 +1646,7 @@ function certHTML(m){
   return '<div class="cert">'
     + '<h1>CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA</h1>'
     + '<div>Certificamos que</div><div class="who">' + esc(m.nome) + '</div>'
-    + '<div>enfrentou o apocalipse zumbi usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde.</div>'
+    + '<div>enfrentou o apocalipse no Bunker 20 usando a química do dia a dia para tratar água, conservar alimentos, gerar luz e calor, fazer sabão e cuidar da saúde.</div>'
     + '<div class="meta"><span>Resultado: <b>' + esc(m.status) + '</b></span><span>Dificuldade: ' + esc(m.dif) + '</span><span>Data: ' + esc(m.data) + '</span><span>Manual: ' + m.pages.length + '/' + PAGE_ORDER.length + ' páginas</span></div>'
     + '<div class="stamp">ÍRIS · VERIFICADO</div>'
     + (m.ach.length ? '<h4>CONQUISTAS</h4><ul>' + m.ach.map(id=>'<li><b>' + esc(ACH[id].t) + '</b> · ' + esc(ACH[id].d) + '</li>').join('') + '</ul>' : '')
@@ -1603,7 +1655,7 @@ function certHTML(m){
     + '</div>';
 }
 function certText(m){
-  return ['CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA · ZUMBIS NÃO SABEM QUÍMICA', 'Estudante: ' + m.nome, 'Resultado: ' + m.status, 'Dificuldade: ' + m.dif, 'Data: ' + m.data, '',
+  return ['CERTIFICADO DE SOBREVIVÊNCIA CIENTÍFICA · BUNKER 20', 'Estudante: ' + m.nome, 'Resultado: ' + m.status, 'Dificuldade: ' + m.dif, 'Data: ' + m.data, '',
     'CONQUISTAS', ...(m.ach.length ? m.ach.map(id=>'- ' + ACH[id].t + ': ' + ACH[id].d) : ['- nenhuma']), '',
     'PÁGINAS DO MANUAL (' + m.pages.length + '/' + PAGE_ORDER.length + ')', ...m.pages.map(id=>'\n' + PAGES[id].t.toUpperCase() + '\n' + PAGES[id].x)].join('\n');
 }
@@ -1617,7 +1669,7 @@ function openCert(){
   $('#certCopy').onclick = ()=> copyText(certText(m), ok=> $('#certMsg').textContent = ok ? 'Texto copiado.' : 'Não foi possível copiar aqui. Selecione o texto do certificado e copie.');
   $('#certDl').onclick = async ()=>{
     if(!canSave()){ $('#certMsg').textContent = 'O download não está disponível nesta visualização. Use "Copiar texto".'; return; }
-    const fname = 'Certificado-ZumbisNaoSabemQuimica-' + (m.nome.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'estudante') + '.pdf';
+    const fname = 'Certificado-Bunker20-' + (m.nome.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'estudante') + '.pdf';
     try{ $('#certMsg').textContent = 'Gerando o PDF…'; await saveFile(fname, certPDF(m), 'application/pdf'); $('#certMsg').textContent = 'PDF enviado para download: ' + fname; }
     catch(e){ $('#certMsg').textContent = e && e.code==='declined' ? 'Download cancelado.' : 'Não foi possível baixar aqui. Use "Copiar texto".'; }
   };
@@ -1625,7 +1677,7 @@ function openCert(){
 }
 
 /* ================== modo professor ================== */
-$('#tTeacher').onclick = ()=>{ if(NET.on) location.href = '/admin'; else openOverlay('teacher'); };
+$('#tTeacher').onclick = ()=>{ if(NET.on) location.href = adminUrl(); else openOverlay('teacher'); };
 $('#cfgGen').onclick = ()=>{
   const a = $('#cfgAct').value, d = $('#cfgDif').value, s = $('#cfgSeed').value==='1' ? String(1000 + Math.floor(Math.random()*9000)) : '0';
   const code = 'TURMA-' + a + '-' + d + '-' + s;
@@ -1676,7 +1728,7 @@ function renderResults(){
       return [o.n, o.t, (DIF[o.dif]||DIF.N).nome, o.d, endTxt(o), o.sc ?? '', o.pg, p ?? '', n, (o.ach||[]).map(a=>ACH[a]?ACH[a].t:a).join(' / '), ...Object.keys(CATS).map(k=> per[k] ? pct(per[k].ok, per[k].n) : '')]
         .map(x=>'"' + String(x).replace(/"/g,'""') + '"').join(';');
     });
-    try{ await saveFile('resultados-zumbis-nao-sabem-quimica.csv', '﻿' + [head.join(';'), ...lines].join('\n'), 'text/csv'); $('#resMsg').textContent = 'Planilha enviada para download.'; }
+    try{ await saveFile('resultados-bunker20.csv', '﻿' + [head.join(';'), ...lines].join('\n'), 'text/csv'); $('#resMsg').textContent = 'Planilha enviada para download.'; }
     catch(e){ $('#resMsg').textContent = e && e.code==='declined' ? 'Download cancelado.' : 'Download indisponível aqui.'; }
   };
 }
@@ -1930,7 +1982,7 @@ function askSession(){
       say('Digite o código da sessão.', 'sys');
       askInput('Código da sessão', '', 8, async code=>{
         try{
-          const j = await api('/api/join', { code:code.trim().toUpperCase(), nick:S.name });
+          const j = await NET.b.join(code.trim().toUpperCase().replace(/[^A-Z0-9]/g,''), S.name);
           S.netToken = j.token; S.name = j.nick; S.tc = 'SESSÃO ' + j.session.code;
           S.seed = j.session.seed || 0; S.startAct = j.session.act || 1;
           say('Você entrou na sessão "' + j.session.name + '" como ' + j.nick + '. O professor acompanha seu progresso.', 'good');
@@ -1980,7 +2032,7 @@ function begin(){
 }
 function titleScreen(){
   S = newRun(); started = false; render();
-  say('ZUMBIS NÃO SABEM QUÍMICA', 'big');
+  say('BUNKER 20', 'big');
   say('Um jogo de sobrevivência sobre a química do dia a dia: água, comida, energia, abrigo, higiene e saúde.', 'sys');
   say('3 atos · 20 dias · no Dia 20 a IA desliga.', 'sys');
   titleMenu();
@@ -1993,7 +2045,7 @@ function titleMenu(){
   list.push({ l:'Novo jogo', n: meta.runs ? 'tentativas anteriores: ' + meta.runs : 'começar do Dia 1', f:newGame });
   list.push({ l:'Cadernos anteriores', n: meta.notebooks.length ? meta.notebooks.length + ' caderno(s) para revisar' : 'nenhum ainda', d:!meta.notebooks.length, f:openArchive });
   list.push({ l:'Conquistas', n: meta.ach.length + ' de ' + Object.keys(ACH).length, f:showAch });
-  if(NET.on) list.push({ l:'Painel do professor', n:'abre em outra página (precisa de senha)', f:()=>{ location.href = '/admin'; } });
+  if(NET.on) list.push({ l:'Painel do professor', n:'abre em outra página (acesso restrito)', f:()=>{ location.href = adminUrl(); } });
   else list.push({ l:'Modo professor', n:'configurar a turma e ler resultados', f:()=>{ openOverlay('teacher'); idle(); } });
   ask(list);
 }

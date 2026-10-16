@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Bunker 20 · Painel do professor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+/* Painel do professor: mesma identidade do jogo (terminal âmbar, pixel), organizado em sessões à esquerda e detalhe à direita */
+:root{ --bg:#13151d; --panel:#1c1f2a; --panel2:#171a23; --line:#2e3345; --fg:#e8dfcb; --dim:#8e8875; --amber:#ffb347; --amber-dim:#8a5d24;
+  --leaf:#9ccc4a; --danger:#e8604f; --warn:#f2c14e; --f-display:'Press Start 2P','Courier New',monospace; --f-term:'VT323','Courier New',monospace; color-scheme:dark }
+*{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-term);font-size:20px;line-height:1.2}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-left)) 40px max(16px,env(safe-area-inset-right));display:grid;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;background:var(--panel);border:2px solid var(--line);padding:10px 14px}
+h1{font-family:var(--f-display);font-size:14px;color:var(--amber);margin:0;line-height:1.6;letter-spacing:.05em}
+h2{font-family:var(--f-display);font-size:11px;color:var(--amber);margin:0;line-height:1.6;letter-spacing:.05em}
+.big{font-size:34px;color:var(--leaf);font-variant-numeric:tabular-nums;line-height:1}
+.k{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.spacer{flex:1}
+.card{background:var(--panel);border:2px solid var(--line);padding:12px 14px;display:grid;gap:10px;min-width:0}
+.grid{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.btn{background:var(--amber);color:#120e08;border:0;padding:6px 14px;box-shadow:3px 3px 0 #07080b;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--amber);border:2px solid var(--amber-dim);box-shadow:none}
+.btn.danger{background:var(--danger);color:#160806}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible,select:focus-visible,.sess:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+input,select{background:#0d0e14;border:2px solid var(--line);padding:6px 8px;width:100%}
+label{display:grid;gap:3px;font-size:17px;color:var(--dim)}
+.form{display:grid;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.msg{font-size:17px;color:var(--dim)} .msg.err{color:var(--danger)}
+.sess{display:grid;gap:3px;text-align:left;background:var(--panel2);border:2px solid var(--line);padding:8px 10px;cursor:pointer;width:100%}
+.sess:hover,.sess.on{border-color:var(--amber)}
+.sess b{font-weight:normal;color:var(--amber);font-size:22px}
+.code{font-family:var(--f-display);font-size:13px;letter-spacing:.12em;color:var(--fg)}
+.codebig{font-family:var(--f-display);font-size:26px;letter-spacing:.18em;color:var(--amber);background:#000;border:2px dashed var(--amber-dim);padding:10px 16px;user-select:all}
+.pill{display:inline-block;padding:0 6px;border:1px solid var(--line);font-size:16px}
+.pill.ok{color:var(--leaf);border-color:#3d5a2a} .pill.off{color:var(--dim)} .pill.closed{color:var(--danger);border-color:#6a2c25}
+.dot{display:inline-block;width:10px;height:10px;background:var(--line);margin-right:6px}
+.dot.on{background:var(--leaf);box-shadow:0 0 6px var(--leaf)}
+.nicks{display:flex;flex-wrap:wrap;gap:6px}
+.nick{background:#0d0e14;border:1px solid #3d5a2a;color:var(--leaf);padding:1px 8px;font-size:18px}
+.tbl{overflow-x:auto;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:18px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--dim);font-weight:normal;text-transform:uppercase;font-size:15px;letter-spacing:.06em}
+.bars{display:grid;gap:6px}
+.barrow{display:grid;grid-template-columns:100px 1fr 54px;gap:10px;align-items:center;font-size:18px}
+.track{height:14px;background:#0b0c11;border:1px solid var(--line);position:relative}.track i{position:absolute;inset:0 auto 0 0}
+.stats{display:flex;flex-wrap:wrap;gap:18px}
+.confirm{border:2px solid var(--danger);padding:10px;display:grid;gap:8px;background:#22130f}
+.login{max-width:420px;margin:12vh auto 0}
+[hidden]{display:none!important}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="card login" id="loginBox">
+    <h1>BUNKER 20 · PAINEL DO PROFESSOR</h1>
+    <p class="msg">Acesso restrito ao professor. Entre com a sua conta Google: você verá apenas as sessões que você mesmo criar.</p>
+    <div class="row"><button class="btn" type="button" id="googleBtn">Entrar com Google</button><a class="msg" href="index.html">Voltar ao jogo</a></div>
+    <span class="msg" id="loginMsg" role="alert"></span>
+  </section>
+
+  <div id="app" hidden style="display:grid;gap:14px">
+    <header>
+      <h1>PAINEL DO PROFESSOR</h1>
+      <div><div class="k">Jogando agora (todas as sessões)</div><div class="big" id="onlineTotal">0</div></div>
+      <div><div class="k">Sessões</div><div class="big" style="color:var(--amber)" id="sessCount">0</div></div>
+      <span class="spacer"></span>
+      <span class="msg" id="lastUpd"></span>
+      <span class="msg" id="who"></span>
+      <a class="btn ghost" href="index.html" target="_blank" rel="noopener">Abrir o jogo</a>
+      <button class="btn ghost" type="button" id="logout">Sair</button>
+    </header>
+
+    <div class="grid">
+      <div style="display:grid;gap:14px">
+        <section class="card">
+          <h2>NOVA SESSÃO</h2>
+          <form class="form" id="newForm">
+            <label for="nName">Nome da sessão <input id="nName" maxlength="40" placeholder="Ex.: 9º A · terça" required></label>
+            <label for="nAct">Começar no
+              <select id="nAct"><option value="1">Ato 1 · água e alimento (Dia 1)</option><option value="2">Ato 2 · energia e abrigo (Dia 8)</option><option value="3">Ato 3 · higiene e saúde (Dia 15)</option></select></label>
+            <label for="nDif">Dificuldade
+              <select id="nDif"><option value="F">Fácil (9º ano)</option><option value="N" selected>Normal</option><option value="D">Difícil (Ensino Médio, com cálculos)</option><option value="L">Livre: o estudante escolhe</option></select></label>
+            <label for="nSeed">Eventos
+              <select id="nSeed"><option value="1">Iguais para todos</option><option value="0">Aleatórios para cada estudante</option></select></label>
+            <button class="btn" type="submit">Criar sessão</button>
+            <span class="msg" id="newMsg" role="status"></span>
+          </form>
+        </section>
+        <section class="card">
+          <h2>SESSÕES</h2>
+          <div id="sessList" style="display:grid;gap:8px"><span class="msg">Nenhuma sessão ainda. Crie a primeira acima.</span></div>
+        </section>
+      </div>
+
+      <section class="card" id="detail">
+        <span class="msg">Escolha uma sessão para ver quem está jogando e os resultados.</span>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+
+const INFO = {"DEC":{"filtro":["agua","Montagem do filtro"],"ferv":["agua","Tempo de fervura"],"cloro":["agua","Dose de água sanitária"],"sodis":["agua","Tempo e água do SODIS"],"conserva":["comida","Método de conservação"],"brotos":["comida","Cuidado com os brotos"],"canteiro":["comida","Local e rega do canteiro"],"lamp":["energia","Montagem da lamparina"],"pilha":["energia","Metais e ligação da pilha"],"isol":["abrigo","Isolamento térmico"],"porta":["abrigo","Reforço da porta"],"sabao":["higiene","Produção segura de sabão"],"mascara":["saude","Máscara de tecido"],"kit":["saude","Kit de primeiros socorros"],"ferida":["saude","Tratamento de ferimento"],"c_ferv":["calc","Cálculo: energia da fervura"],"c_cloro":["calc","Cálculo: gotas de cloro"],"c_sodis":["calc","Cálculo: garrafas do SODIS"],"c_pilha":["calc","Cálculo: tensão em série"],"c_salga":["calc","Cálculo: sal da salmoura"],"t_filtro":["agua","Pergunta da ÍRIS: Como deixo a água do córrego limpa?"],"t_desinf":["agua","Pergunta da ÍRIS: Água filtrada já dá para beber?"],"t_conserva":["comida","Pergunta da ÍRIS: Como guardo comida sem geladeira?"],"t_horta":["comida","Pergunta da ÍRIS: Como começo uma horta aqui dentro?"],"t_luz":["energia","Pergunta da ÍRIS: Como ilumino o bunker sem gastar energia?"],"t_pilha":["energia","Pergunta da ÍRIS: Dá para fazer uma pilha com limão?"],"t_abrigo":["abrigo","Pergunta da ÍRIS: As noites estão esfriando. Como seguro o calor?"],"t_sabao":["higiene","Pergunta da ÍRIS: Como faço sabão?"],"t_mascara":["saude","Pergunta da ÍRIS: A cidade está pegando fogo. Como protejo a respiração?"],"t_socorros":["saude","Pergunta da ÍRIS: E se eu me machucar?"],"q1_0":["agua","Teste do Ato 1: No filtro de garrafa PET, qual camada fica logo acima do algodão?"],"q1_1":["agua","Teste do Ato 1: A água saiu transparente do filtro. O que ainda falta?"],"q1_2":["agua","Teste do Ato 1: Qual a dose de água sanitária (2 a 2,5%) para desinfetar 1 litro?"],"q1_3":["agua","Teste do Ato 1: Por que o SODIS não funciona com água turva?"],"q1_4":["comida","Teste do Ato 1: Qual é o princípio da salga?"],"q1_5":["comida","Teste do Ato 1: Qual conservação combina com legumes?"],"q1_6":["comida","Teste do Ato 1: O que a semente precisa para germinar?"],"q2_0":["energia","Teste do Ato 2: Qual par de metais faz a pilha de limão funcionar?"],"q2_1":["energia","Teste do Ato 2: Para somar a tensão de vários limões, eles devem ser ligados em:"],"q2_2":["energia","Teste do Ato 2: Por que a pilha de limão para de funcionar depois de uns dias?"],"q2_3":["energia","Teste do Ato 2: Quais são os três lados do triângulo do fogo?"],"q2_4":["energia","Teste do Ato 2: Por que o pavio da lamparina deve ficar curto?"],"q2_5":["abrigo","Teste do Ato 2: Vedar as frestas da porta evita perda de calor por:"],"q2_6":["abrigo","Teste do Ato 2: Qual material é PIOR para isolar o bunker do frio?"],"f0":["agua","Dia 20: Água sem eletricidade"],"f1":["energia","Dia 20: Luz no apagão"],"f2":["abrigo","Dia 20: Frente fria"],"f3":["saude","Dia 20: Corte na mão"],"f4":["comida","Dia 20: Comida a longo prazo"],"f5":["higiene","Dia 20: Mãos sujas"]},"CATS":{"agua":"Água","comida":"Comida","energia":"Energia","abrigo":"Abrigo","higiene":"Higiene","saude":"Saúde","calc":"Cálculos"},"TIER":{"auto":"Bunker autossustentável","sobre":"Sobrevivente","fio":"Por um fio"},"PAGES_N":23};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* ===== camada Firebase do painel do professor =====
+   O professor entra com a conta Google. Cada professor só enxerga e altera as próprias sessões
+   (as regras do banco conferem o dono em cada leitura e escrita). */
+const DIFN = { F:'Fácil (9º ano)', N:'Normal', D:'Difícil (EM)', L:'Livre' };
+const ONLINE_MS = 90 * 1000;
+let current = null, confirming = false, lastDetail = null, USER = null, OFFSET = 0;
+let SESS = {}, PLAYERS = {}; const LISTEN = {};
+const fbOk = window.firebase && window.FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && !/COLE/.test(FIREBASE_CONFIG.apiKey);
+let auth = null, db = null;
+if(fbOk){ firebase.initializeApp(FIREBASE_CONFIG); auth = firebase.auth(); db = firebase.database(); }
+const now = ()=> Date.now() + OFFSET;
+
+function showLogin(msg, err){ $('#app').hidden = true; $('#loginBox').hidden = false; $('#loginMsg').textContent = msg || ''; $('#loginMsg').className = 'msg' + (err ? ' err' : ''); }
+$('#googleBtn').onclick = async ()=>{
+  if(!fbOk) return showLogin('O Firebase ainda não foi configurado: preencha o arquivo firebase-config.js (veja o LEIA-ME).', true);
+  $('#loginMsg').textContent = 'Abrindo a janela do Google…';
+  try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch(e){
+    const m = { 'auth/popup-blocked':'O navegador bloqueou a janela do Google. Permita pop-ups para este site e tente de novo.',
+      'auth/popup-closed-by-user':'A janela do Google foi fechada antes de terminar.',
+      'auth/unauthorized-domain':'Este endereço ainda não foi autorizado no Firebase (Authentication > Configurações > Domínios autorizados).',
+      'auth/operation-not-allowed':'O login com Google não está ativado no Firebase (Authentication > Método de login).' }[e.code];
+    showLogin(m || ('Não foi possível entrar: ' + (e.message || e.code)), true);
+  }
+};
+$('#logout').onclick = async ()=>{ stopAll(); await auth.signOut(); showLogin('Você saiu do painel.'); };
+
+function stopAll(){
+  if(USER) db.ref('sessions').orderByChild('owner').equalTo(USER.uid).off();
+  Object.keys(LISTEN).forEach(sid=>{ db.ref('players/' + sid).off(); delete LISTEN[sid]; });
+  SESS = {}; PLAYERS = {}; current = null;
+}
+function start(user){
+  USER = user; $('#loginBox').hidden = true; $('#app').hidden = false;
+  $('#who').textContent = user.displayName || user.email || 'Professor';
+  db.ref('.info/serverTimeOffset').on('value', s=>{ OFFSET = s.val() || 0; });
+  db.ref('sessions').orderByChild('owner').equalTo(user.uid).on('value', snap=>{
+    SESS = snap.val() || {};
+    Object.keys(SESS).forEach(sid=>{ if(!LISTEN[sid]){ LISTEN[sid] = true; db.ref('players/' + sid).on('value', ps=>{ PLAYERS[sid] = ps.val() || {}; refresh(); }, ()=>{}); } });
+    Object.keys(LISTEN).forEach(sid=>{ if(!SESS[sid]){ db.ref('players/' + sid).off(); delete LISTEN[sid]; delete PLAYERS[sid]; } });
+    refresh();
+  }, e=>{ $('#lastUpd').textContent = 'Sem permissão para ler as sessões: confira as regras do banco (LEIA-ME, passo 3).'; });
+}
+if(fbOk){
+  auth.onAuthStateChanged(u=>{
+    if(u && !u.isAnonymous) start(u);
+    else { stopAll(); showLogin(u && u.isAnonymous ? 'Este navegador está conectado como estudante. Entre com a sua conta Google de professor.' : ''); }
+  });
+} else showLogin('O Firebase ainda não foi configurado: preencha o arquivo firebase-config.js (veja o LEIA-ME).', true);
+
+function playersOf(sid){
+  const seen = {};
+  return Object.entries(PLAYERS[sid] || {}).map(([id,p])=>{
+    let report = null; try{ report = p.report ? JSON.parse(p.report) : null; }catch(e){}
+    const k = (p.nick || '?').toLowerCase(); seen[k] = (seen[k] || 0) + 1;
+    return { id, nick:(p.nick || '?') + (seen[k] > 1 ? ' (' + seen[k] + ')' : ''), joinedAt:p.joinedAt || 0, lastSeen:p.lastSeen || 0,
+      online: !!p.online && now() - (p.lastSeen || 0) < ONLINE_MS, state: p.state ? Object.assign({ end:'' }, p.state) : null, report };
+  }).sort((a,b)=> (b.online - a.online) || a.nick.localeCompare(b.nick, 'pt-BR'));
+}
+function summary(sid){
+  const s = SESS[sid], ps = playersOf(sid), on = ps.filter(p=>p.online);
+  return { id:sid, code:s.code, name:s.name, act:s.act, dif:s.dif, sameEvents:!!s.seed, closed:!!s.closed, createdAt:s.createdAt,
+    total:ps.length, online:on.length, playing:on.filter(p=>!(p.state && p.state.end)).length, players:ps };
+}
+function refresh(){
+  if(!USER) return;
+  const list = Object.keys(SESS).map(summary).sort((a,b)=>b.createdAt - a.createdAt);
+  $('#onlineTotal').textContent = list.reduce((a,s)=>a + s.online, 0);
+  $('#sessCount').textContent = list.length;
+  $('#lastUpd').textContent = 'Ao vivo · atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+  const box = $('#sessList'); box.innerHTML = '';
+  if(!list.length) box.innerHTML = '<span class="msg">Nenhuma sessão ainda. Crie a primeira acima.</span>';
+  list.forEach(s=>{
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'sess' + (s.id===current ? ' on' : '');
+    b.innerHTML = '<span class="row"><b>' + esc(s.name) + '</b><span class="code">' + esc(s.code) + '</span>' + (s.closed ? '<span class="pill closed">encerrada</span>' : '') + '</span>'
+      + '<span class="msg"><span class="dot' + (s.online ? ' on' : '') + '"></span>' + s.online + ' online · ' + s.playing + ' jogando · ' + s.total + ' entraram</span>';
+    b.onclick = ()=>{ current = s.id; confirming = false; refresh(); };
+    box.appendChild(b);
+  });
+  if(current && !SESS[current]){ current = null; $('#detail').innerHTML = '<span class="msg">A sessão foi excluída.</span>'; }
+  if(current && !confirming){ lastDetail = summary(current); renderDetail(lastDetail); }
+}
+setInterval(()=>{ if(USER && !confirming) refresh(); }, 5000);
+
+const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function randCode(){ const a = new Uint32Array(5); crypto.getRandomValues(a); return [...a].map(x=>CODE_ABC[x % CODE_ABC.length]).join(''); }
+$('#newForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  try{
+    let code = null;
+    for(let i=0;i<8 && !code;i++){ const c = randCode(); if(!(await db.ref('codes/' + c).get()).exists()) code = c; }
+    if(!code) throw new Error('Não consegui gerar um código livre. Tente de novo.');
+    const sid = db.ref('sessions').push().key;
+    const seed = $('#nSeed').value === '1' ? String(1000 + Math.floor(Math.random()*9000)) : '';
+    await db.ref().update({
+      ['sessions/' + sid]: { owner:USER.uid, ownerName:String(USER.displayName || '').slice(0,80), code, name:$('#nName').value.trim().slice(0,40) || 'Turma',
+        act:+$('#nAct').value, dif:$('#nDif').value, seed, closed:false, createdAt:firebase.database.ServerValue.TIMESTAMP },
+      ['codes/' + code]: sid });
+    current = sid; $('#nName').value = ''; $('#newMsg').textContent = 'Sessão criada. Passe o código ' + code + ' para a turma.';
+  }catch(err){ $('#newMsg').textContent = 'Não foi possível criar: ' + (err.message || err); }
+});
+async function toggleSession(d){ await db.ref('sessions/' + d.id + '/closed').set(!d.closed); }
+async function deleteSession(d){ await db.ref().update({ ['sessions/' + d.id]:null, ['codes/' + d.code]:null, ['players/' + d.id]:null }); }
+
+const endTxt = st => !st ? 'entrando' : st.end==='fim' ? 'terminou' : st.end==='morte' ? 'não resistiu' : st.phase==='final' ? 'Dia 20' : 'jogando';
+const pct = (ok,n) => n ? Math.round(ok/n*100) : null;
+function renderDetail(d){
+  const now = Date.now();
+  const rows = d.players.map(p=>{ const r = p.report, n = r ? r.r.length : 0, ok = r ? r.r.reduce((a,x)=>a+x[1],0) : 0; return { p, r, n, ok, pc:pct(ok,n) }; });
+  const cat = {}, dec = {};
+  rows.forEach(({p,r})=>{ if(!r) return; r.r.forEach(([id,ok])=>{ const di = INFO.DEC[id]; if(!di) return;
+    (cat[di[0]] = cat[di[0]] || {n:0,ok:0}); cat[di[0]].n++; cat[di[0]].ok += ok;
+    (dec[id] = dec[id] || {n:0,err:0,who:new Set()}); dec[id].n++; if(!ok){ dec[id].err++; dec[id].who.add(p.nick); } }); });
+  const hard = Object.entries(dec).filter(([,v])=>v.n>=2 && v.err>0).sort((a,b)=> b[1].err/b[1].n - a[1].err/a[1].n || b[1].err-a[1].err).slice(0,8);
+  const color = p => p==null ? 'var(--line)' : p>=75 ? 'var(--leaf)' : p>=50 ? 'var(--warn)' : 'var(--danger)';
+  const online = d.players.filter(p=>p.online);
+  const ago = t => { const s = Math.round((now - t)/1000); return s < 60 ? s + ' s' : Math.round(s/60) + ' min'; };
+  $('#detail').innerHTML =
+    '<div class="row"><h2>' + esc(d.name) + '</h2><span class="spacer"></span>'
+    + '<button class="btn ghost" type="button" id="toggle">' + (d.closed ? 'Reabrir entradas' : 'Encerrar entradas') + '</button>'
+    + '<button class="btn ghost" type="button" id="csv"' + (rows.some(x=>x.r) ? '' : ' disabled') + '>Baixar planilha (.csv)</button>'
+    + '<button class="btn danger" type="button" id="del">Excluir sessão</button></div>'
+    + '<div id="confirmBox"></div>'
+    + '<div class="row"><span class="codebig">' + esc(d.code) + '</span><span class="msg">Os estudantes abrem o link do jogo, digitam o nick e este código.<br>Começa no Ato ' + d.act + ' · ' + esc(DIFN[d.dif]) + ' · eventos ' + (d.sameEvents ? 'iguais para todos' : 'aleatórios') + (d.closed ? ' · <span style="color:var(--danger)">entradas encerradas</span>' : '') + '</span></div>'
+    + '<div class="stats"><div><div class="k">Online agora</div><div class="big">' + online.length + '</div></div><div><div class="k">Jogando</div><div class="big">' + d.playing + '</div></div><div><div class="k">Entraram</div><div class="big" style="color:var(--fg)">' + d.total + '</div></div></div>'
+    + '<div><div class="k" style="margin-bottom:6px">Nicks online</div><div class="nicks">' + (online.length ? online.map(p=>'<span class="nick">' + esc(p.nick) + '</span>').join('') : '<span class="msg">Ninguém online agora.</span>') + '</div></div>'
+    + '<div class="tbl"><table><thead><tr><th>Nick</th><th>Status</th><th>Dia</th><th>Saúde</th><th>Anotações</th><th>Pontos</th><th>Acertos</th><th>Último sinal</th></tr></thead><tbody>'
+    + (rows.length ? rows.map(({p,r,n,ok,pc})=>'<tr><td><span class="dot' + (p.online ? ' on' : '') + '"></span>' + esc(p.nick) + '</td><td>' + (p.online ? '<span class="pill ok">' + endTxt(p.state) + '</span>' : '<span class="pill off">offline · ' + endTxt(p.state) + '</span>') + '</td><td>' + (p.state ? p.state.day + '/20' : '—') + '</td><td>' + (p.state ? p.state.hp : '—') + '</td><td>' + (p.state ? p.state.notes + '/' + INFO.PAGES_N : '—') + '</td><td>' + (r && r.sc!=null ? r.sc + '/20' + (r.tier ? ' · ' + esc(INFO.TIER[r.tier]) : '') : '—') + '</td><td>' + (pc!=null ? pc + '% (' + ok + '/' + n + ')' : '—') + '</td><td>' + ago(p.lastSeen) + '</td></tr>').join('') : '<tr><td colspan="8" class="msg">Ninguém entrou ainda.</td></tr>')
+    + '</tbody></table></div>'
+    + '<div style="display:grid;gap:8px"><h2>ACERTOS POR TEMA</h2>' + (Object.keys(cat).length ? '<div class="bars">' + Object.keys(INFO.CATS).filter(k=>cat[k]).map(k=>{ const p = pct(cat[k].ok,cat[k].n); return '<div class="barrow"><span>' + INFO.CATS[k] + '</span><span class="track"><i style="width:' + p + '%;background:' + color(p) + '"></i></span><span>' + p + '%</span></div>'; }).join('') + '</div>' : '<span class="msg">Os acertos aparecem conforme os estudantes jogam.</span>') + '</div>'
+    + '<div style="display:grid;gap:8px"><h2>DECISÕES COM MAIS ERROS</h2>' + (hard.length ? '<div class="tbl"><table><thead><tr><th>Decisão</th><th>Tema</th><th>Erros</th><th>Quem errou</th></tr></thead><tbody>' + hard.map(([id,v])=>'<tr><td style="white-space:normal;min-width:220px">' + esc(INFO.DEC[id][1]) + '</td><td>' + INFO.CATS[INFO.DEC[id][0]] + '</td><td>' + Math.round(v.err/v.n*100) + '% (' + v.err + '/' + v.n + ')</td><td style="white-space:normal">' + esc([...v.who].join(', ')) + '</td></tr>').join('') + '</tbody></table></div><span class="msg">Bons pontos de partida para a roda de conversa final.</span>' : '<span class="msg">Ainda não há decisões repetidas o bastante para comparar.</span>') + '</div>';
+  $('#toggle').onclick = async ()=>{ try{ await toggleSession(d); }catch(e){} };
+  $('#csv').onclick = ()=> downloadCSV(d, rows);
+  $('#del').onclick = ()=>{
+    confirming = true;
+    $('#confirmBox').innerHTML = '<div class="confirm"><span>Excluir a sessão "' + esc(d.name) + '"? Os resultados de ' + d.total + ' estudante(s) serão apagados e quem estiver jogando continua apenas no modo sozinho. Isso não pode ser desfeito.</span><div class="row"><button class="btn danger" type="button" id="delYes">Excluir de vez</button><button class="btn ghost" type="button" id="delNo">Cancelar</button></div></div>';
+    $('#delNo').onclick = ()=>{ confirming = false; renderDetail(lastDetail); };
+    $('#delYes').onclick = async ()=>{ try{ await deleteSession(d); current = null; confirming = false; $('#detail').innerHTML = '<span class="msg">Sessão excluída.</span>'; refresh(); }catch(e){ $('#confirmBox').textContent = 'Não foi possível excluir: ' + e.message; } };
+  };
+}
+function downloadCSV(d, rows){
+  const head = ['nick','status','dia','saude','anotacoes','pontos','final','acertos_pct','decisoes', ...Object.keys(INFO.CATS).map(k=>'acertos_'+k)];
+  const lines = rows.map(({p,r,n,pc})=>{
+    const per = {}; (r ? r.r : []).forEach(([id,ok])=>{ const di = INFO.DEC[id]; if(!di) return; (per[di[0]] = per[di[0]] || {n:0,ok:0}); per[di[0]].n++; per[di[0]].ok += ok; });
+    return [p.nick, endTxt(p.state), p.state ? p.state.day : '', p.state ? p.state.hp : '', p.state ? p.state.notes : '', r && r.sc!=null ? r.sc : '', r && r.tier ? INFO.TIER[r.tier] : '', pc ?? '', n, ...Object.keys(INFO.CATS).map(k=> per[k] ? pct(per[k].ok, per[k].n) : '')]
+      .map(x=>'"' + String(x).replace(/"/g,'""') + '"').join(';');
+  });
+  const blob = new Blob(['﻿' + [head.join(';'), ...lines].join('\n')], { type:'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bunker20-' + d.code + '-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+</script>
+</body>
+</html>
